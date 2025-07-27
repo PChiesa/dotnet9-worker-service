@@ -1,5 +1,7 @@
 # .NET 9 Worker Service - Order Processing System
 
+This is an example project to test PRP AI Workflow with Claude Code.
+
 A production-ready .NET 9 Worker Service application implementing an order processing system with Clean Architecture, MassTransit messaging, PostgreSQL persistence, and OpenTelemetry observability.
 
 ## 🎯 Application Overview
