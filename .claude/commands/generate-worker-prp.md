@@ -2,7 +2,7 @@
 
 ## Feature file: {filename}
 
-Generate a comprehensive PRP for .NET 9 Worker Service features based on Clean Architecture principles with MassTransit, PostgreSQL, and OpenTelemetry integration.
+Use the implementation-planner agent to generate a comprehensive PRP for .NET 9 Worker Service features based on Clean Architecture principles with MassTransit, PostgreSQL, and OpenTelemetry integration.
 
 **CRITICAL: Web search and documentation research is your best friend. Use it extensively throughout this process.**
 

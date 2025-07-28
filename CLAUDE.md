@@ -7,8 +7,8 @@ This file contains the domain-specific rules for .NET 9 Worker Service developme
 **IMPORTANT: These principles apply to ALL .NET Worker Service development:**
 
 ### PRP Framework Workflow
-- **Always start with INITIAL.md** - Define worker service requirements before generating PRPs
-- **Use the PRP pattern**: INITIAL.md → `/generate-worker-prp INITIAL.md` → `/execute-worker-prp PRPs/filename.md`
+- **Always read features under FRs/** - Check existing feature requests before generating a new PRP
+- **Use the PRP pattern**: new-feature-request.md → `/generate-worker-prp new-feature-request.md` → `/execute-worker-prp PRPs/filename.md`
 - **Follow validation loops** - Each PRP must include executable validation steps
 - **Context is King** - Include ALL necessary documentation, examples, and patterns
 
@@ -29,10 +29,10 @@ This file contains the domain-specific rules for .NET 9 Worker Service developme
 ### Project Structure Standards
 ```
 src/
-├── ProjectName.Domain/          # Entities, Value Objects, Interfaces
-├── ProjectName.Application/     # CQRS Handlers, Services, DTOs
-├── ProjectName.Infrastructure/  # EF Context, Repositories, MassTransit
-└── ProjectName.Worker/          # BackgroundServices, Program.cs, Health Checks
+├── WorkerService.Domain/          # Entities, Value Objects, Interfaces
+├── WorkerService.Application/     # CQRS Handlers, Services, DTOs
+├── WorkerService.Infrastructure/  # EF Context, Repositories, MassTransit
+└── WorkerService.Worker/          # BackgroundServices, Program.cs, Health Checks
 ```
 
 ### Anti-Patterns (NEVER DO)
