@@ -1,6 +1,6 @@
 # Execute Worker Service PRP
 
-Execute a comprehensive Worker Service PRP to implement .NET 9 background processing features with Clean Architecture, MassTransit, PostgreSQL, and OpenTelemetry.
+Use the senior-developer agent to execute a comprehensive Worker Service PRP to implement .NET 9 background processing features with Clean Architecture, MassTransit, PostgreSQL, and OpenTelemetry.
 
 ## PRP File: {filename}
 
