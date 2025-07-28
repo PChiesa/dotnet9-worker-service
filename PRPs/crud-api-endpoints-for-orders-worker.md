@@ -12,7 +12,7 @@ Based on extensive research of .NET 9 patterns, this implementation leverages:
 - **MassTransit integration** for message publishing from API endpoints
 - **OpenTelemetry instrumentation** for comprehensive observability
 - **FluentValidation** for robust input validation
-- **AutoMapper** for efficient entity-DTO mapping
+- **Manual mapping extensions** for efficient and maintainable entity-DTO conversion
 
 **Confidence Level**: 9/10 - Implementation plan based on latest .NET 9 patterns with production-ready considerations.
 
@@ -146,11 +146,9 @@ builder.Services.AddDbContextPool<ApplicationDbContext>(options =>
 <!-- Add to WorkerService.Worker.csproj -->
 <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0" />
 <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
-
-<!-- Add to WorkerService.Application.csproj -->
-<PackageReference Include="AutoMapper" Version="13.0.1" />
-<PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="13.0.1" />
 ```
+
+**Note**: No additional packages required for manual mapping - using static extension methods for efficient, maintainable conversions following Clean Architecture principles.
 
 **1.2 Project Configuration Verification**
 - ✅ WorkerService.Worker.csproj already uses `Microsoft.NET.Sdk.Web`
@@ -193,6 +191,147 @@ public record GetOrdersQuery(
     int PageNumber = 1,
     int PageSize = 20,
     string? CustomerId = null) : IRequest<PagedOrdersResult>;
+
+// Command/Query Handlers with Manual Mapping
+public class GetOrderQueryHandler : IRequestHandler<GetOrderQuery, OrderResponseDto?>
+{
+    private readonly IOrderRepository _repository;
+    private readonly ILogger<GetOrderQueryHandler> _logger;
+
+    public GetOrderQueryHandler(IOrderRepository repository, ILogger<GetOrderQueryHandler> logger)
+    {
+        _repository = repository;
+        _logger = logger;
+    }
+
+    public async Task<OrderResponseDto?> Handle(GetOrderQuery request, CancellationToken cancellationToken)
+    {
+        var order = await _repository.GetByIdAsync(request.OrderId, cancellationToken);
+        
+        if (order == null)
+        {
+            _logger.LogWarning("Order {OrderId} not found", request.OrderId);
+            return null;
+        }
+
+        return order.ToResponseDto();
+    }
+}
+
+public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, PagedOrdersResult>
+{
+    private readonly IOrderRepository _repository;
+    private readonly ILogger<GetOrdersQueryHandler> _logger;
+
+    public GetOrdersQueryHandler(IOrderRepository repository, ILogger<GetOrdersQueryHandler> logger)
+    {
+        _repository = repository;
+        _logger = logger;
+    }
+
+    public async Task<PagedOrdersResult> Handle(GetOrdersQuery request, CancellationToken cancellationToken)
+    {
+        var pagedData = await _repository.GetPagedAsync(
+            request.PageNumber, request.PageSize, cancellationToken);
+        
+        _logger.LogDebug("Retrieved {Count} orders for page {PageNumber}", 
+            pagedData.Orders.Count(), request.PageNumber);
+
+        return pagedData.ToPagedResult(request.PageNumber, request.PageSize);
+    }
+}
+
+public class UpdateOrderCommandHandler : IRequestHandler<UpdateOrderCommand, UpdateOrderResult?>
+{
+    private readonly IOrderRepository _repository;
+    private readonly IPublishEndpoint _publishEndpoint;
+    private readonly ILogger<UpdateOrderCommandHandler> _logger;
+
+    public UpdateOrderCommandHandler(
+        IOrderRepository repository,
+        IPublishEndpoint publishEndpoint,
+        ILogger<UpdateOrderCommandHandler> logger)
+    {
+        _repository = repository;
+        _publishEndpoint = publishEndpoint;
+        _logger = logger;
+    }
+
+    public async Task<UpdateOrderResult?> Handle(UpdateOrderCommand request, CancellationToken cancellationToken)
+    {
+        var existingOrder = await _repository.GetByIdAsync(request.OrderId, cancellationToken);
+        if (existingOrder == null)
+        {
+            _logger.LogWarning("Order {OrderId} not found for update", request.OrderId);
+            return null;
+        }
+
+        // Update order properties using domain methods
+        existingOrder.UpdateCustomerId(request.CustomerId);
+        
+        // Clear existing items and add new ones
+        existingOrder.ClearItems();
+        foreach (var itemDto in request.Items)
+        {
+            var orderItem = new OrderItem(itemDto.ProductId, itemDto.Quantity, new Money(itemDto.UnitPrice));
+            existingOrder.AddItem(orderItem);
+        }
+
+        await _repository.UpdateAsync(existingOrder, cancellationToken);
+        await _repository.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Order {OrderId} updated for customer {CustomerId}", 
+            existingOrder.Id, existingOrder.CustomerId);
+
+        // Publish domain events
+        foreach (var domainEvent in existingOrder.DomainEvents)
+        {
+            await _publishEndpoint.Publish(domainEvent, cancellationToken);
+        }
+        
+        existingOrder.ClearDomainEvents();
+
+        OrderApiMetrics.OrdersUpdated.Add(1, 
+            new KeyValuePair<string, object?>("customer_id", request.CustomerId));
+
+        return existingOrder.ToUpdateResult();
+    }
+}
+
+public class DeleteOrderCommandHandler : IRequestHandler<DeleteOrderCommand, bool>
+{
+    private readonly IOrderRepository _repository;
+    private readonly ILogger<DeleteOrderCommandHandler> _logger;
+
+    public DeleteOrderCommandHandler(IOrderRepository repository, ILogger<DeleteOrderCommandHandler> logger)
+    {
+        _repository = repository;
+        _logger = logger;
+    }
+
+    public async Task<bool> Handle(DeleteOrderCommand request, CancellationToken cancellationToken)
+    {
+        var order = await _repository.GetByIdAsync(request.OrderId, cancellationToken);
+        if (order == null)
+        {
+            _logger.LogWarning("Order {OrderId} not found for deletion", request.OrderId);
+            return false;
+        }
+
+        // Soft delete by updating status
+        order.MarkAsDeleted();
+        
+        await _repository.UpdateAsync(order, cancellationToken);
+        await _repository.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Order {OrderId} marked as deleted", request.OrderId);
+
+        OrderApiMetrics.OrdersDeleted.Add(1, 
+            new KeyValuePair<string, object?>("order_id", request.OrderId.ToString()));
+
+        return true;
+    }
+}
 ```
 
 **3.2 Response DTOs**
@@ -248,23 +387,100 @@ public async Task<(IEnumerable<Order> Orders, int TotalCount)> GetPagedAsync(
 }
 ```
 
-**4.2 AutoMapper Configuration**
+**4.2 Manual Mapping Extensions**
 ```csharp
-public class OrderMappingProfile : Profile
+// Add to WorkerService.Application/Common/Extensions/MappingExtensions.cs
+public static class OrderMappingExtensions
 {
-    public OrderMappingProfile()
+    public static OrderResponseDto ToResponseDto(this Order order)
     {
-        CreateMap<Order, OrderResponseDto>()
-            .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString()));
+        ArgumentNullException.ThrowIfNull(order);
         
-        CreateMap<OrderItem, OrderItemResponseDto>();
+        return new OrderResponseDto(
+            Id: order.Id,
+            CustomerId: order.CustomerId,
+            OrderDate: order.OrderDate,
+            Status: order.Status.ToString(),
+            TotalAmount: order.TotalAmount.Amount,
+            Items: order.Items.Select(item => item.ToResponseDto()));
+    }
+    
+    public static OrderItemResponseDto ToResponseDto(this OrderItem orderItem)
+    {
+        ArgumentNullException.ThrowIfNull(orderItem);
         
-        CreateMap<CreateOrderCommand, Order>()
-            .ConstructUsing((src, context) => 
-                new Order(src.CustomerId, 
-                    src.Items.Select(i => new OrderItem(i.ProductId, i.Quantity, new Money(i.UnitPrice)))));
+        return new OrderItemResponseDto(
+            Id: orderItem.Id,
+            ProductId: orderItem.ProductId,
+            Quantity: orderItem.Quantity,
+            UnitPrice: orderItem.UnitPrice.Amount,
+            TotalPrice: orderItem.UnitPrice.Amount * orderItem.Quantity);
+    }
+    
+    public static Order ToEntity(this CreateOrderCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        
+        var orderItems = command.Items?.Select(item => 
+            new OrderItem(item.ProductId, item.Quantity, new Money(item.UnitPrice))) 
+            ?? throw new ArgumentException("Order items cannot be null", nameof(command));
+            
+        return new Order(command.CustomerId, orderItems);
+    }
+    
+    public static CreateOrderResult ToCreateResult(this Order order)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+        
+        return new CreateOrderResult(
+            OrderId: order.Id,
+            CustomerId: order.CustomerId,
+            TotalAmount: order.TotalAmount.Amount,
+            OrderDate: order.OrderDate);
+    }
+    
+    public static PagedOrdersResult ToPagedResult(
+        this (IEnumerable<Order> Orders, int TotalCount) pagedData,
+        int pageNumber,
+        int pageSize)
+    {
+        var (orders, totalCount) = pagedData;
+        var orderDtos = orders.Select(o => o.ToResponseDto());
+        
+        return new PagedOrdersResult(
+            Orders: orderDtos,
+            TotalCount: totalCount,
+            PageNumber: pageNumber,
+            PageSize: pageSize,
+            HasNextPage: pageNumber * pageSize < totalCount,
+            HasPreviousPage: pageNumber > 1);
+    }
+    
+    public static UpdateOrderResult ToUpdateResult(this Order order)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+        
+        return new UpdateOrderResult(
+            OrderId: order.Id,
+            CustomerId: order.CustomerId,
+            TotalAmount: order.TotalAmount.Amount,
+            UpdatedAt: order.UpdatedAt);
     }
 }
+
+// Additional DTO record definitions for completeness
+public record OrderItemResponseDto(
+    Guid Id,
+    string ProductId,
+    int Quantity,
+    decimal UnitPrice,
+    decimal TotalPrice);
+
+public record UpdateOrderResult(
+    Guid OrderId,
+    string CustomerId,
+    decimal TotalAmount,
+    DateTime UpdatedAt);
 ```
 
 ### Phase 5: Worker Layer API Implementation
@@ -398,8 +614,7 @@ builder.Services.AddEndpointsApiExplorer();
 // Configure .NET 9 Native OpenAPI
 builder.Services.AddOpenApi();
 
-// Configure AutoMapper
-builder.Services.AddAutoMapper(typeof(OrderMappingProfile));
+// Manual mapping configured via static extension methods - no additional DI registration required
 
 // Configure CORS for development
 builder.Services.AddCors(options =>
@@ -542,26 +757,56 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Cre
 {
     private readonly IOrderRepository _repository;
     private readonly IPublishEndpoint _publishEndpoint;
-    private readonly IMapper _mapper;
+    private readonly ILogger<CreateOrderCommandHandler> _logger;
+
+    public CreateOrderCommandHandler(
+        IOrderRepository repository,
+        IPublishEndpoint publishEndpoint,
+        ILogger<CreateOrderCommandHandler> logger)
+    {
+        _repository = repository;
+        _publishEndpoint = publishEndpoint;
+        _logger = logger;
+    }
 
     public async Task<CreateOrderResult> Handle(CreateOrderCommand request, CancellationToken cancellationToken)
     {
-        // Create order entity
-        var order = _mapper.Map<Order>(request);
+        using var activity = OrderApiMetrics.ActivitySource.StartActivity("CreateOrder");
+        activity?.SetTag("order.customer_id", request.CustomerId);
         
-        // Save to database
-        await _repository.AddAsync(order, cancellationToken);
-        await _repository.SaveChangesAsync(cancellationToken);
-
-        // Publish domain events
-        foreach (var domainEvent in order.DomainEvents)
+        try
         {
-            await _publishEndpoint.Publish(domainEvent, cancellationToken);
-        }
-        
-        order.ClearDomainEvents();
+            // Create order entity using manual mapping
+            var order = request.ToEntity();
+            
+            // Save to database
+            await _repository.AddAsync(order, cancellationToken);
+            await _repository.SaveChangesAsync(cancellationToken);
+            
+            _logger.LogInformation("Order {OrderId} created for customer {CustomerId}", 
+                order.Id, order.CustomerId);
 
-        return _mapper.Map<CreateOrderResult>(order);
+            // Publish domain events
+            foreach (var domainEvent in order.DomainEvents)
+            {
+                await _publishEndpoint.Publish(domainEvent, cancellationToken);
+                _logger.LogDebug("Published domain event {EventType} for order {OrderId}", 
+                    domainEvent.GetType().Name, order.Id);
+            }
+            
+            order.ClearDomainEvents();
+
+            // Record metrics
+            OrderApiMetrics.OrdersCreated.Add(1, 
+                new KeyValuePair<string, object?>("customer_id", request.CustomerId));
+
+            return order.ToCreateResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create order for customer {CustomerId}", request.CustomerId);
+            throw;
+        }
     }
 }
 ```
@@ -604,6 +849,7 @@ builder.Services.AddOpenTelemetry()
         .AddEntityFrameworkCoreInstrumentation()
         .AddSqlClientInstrumentation()
         .AddSource("MassTransit")
+        .AddSource("OrdersAPI")
         .AddOtlpExporter())
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
@@ -619,6 +865,9 @@ builder.Services.AddOpenTelemetry()
 public static class OrderApiMetrics
 {
     private static readonly Meter _meter = new("OrdersAPI", "1.0.0");
+    private static readonly ActivitySource _activitySource = new("OrdersAPI", "1.0.0");
+    
+    public static ActivitySource ActivitySource => _activitySource;
     
     public static readonly Counter<int> OrdersCreated = _meter.CreateCounter<int>("orders.created.total");
     public static readonly Counter<int> OrdersUpdated = _meter.CreateCounter<int>("orders.updated.total");
@@ -649,7 +898,7 @@ grep "Microsoft.NET.Sdk.Web" src/WorkerService.Worker/WorkerService.Worker.cspro
 
 # Verify required packages
 dotnet list src/WorkerService.Worker/ package | grep -E "OpenTelemetry|OpenApi|Swashbuckle"
-dotnet list src/WorkerService.Application/ package | grep -E "AutoMapper|MediatR|FluentValidation"
+dotnet list src/WorkerService.Application/ package | grep -E "MediatR|FluentValidation"
 ```
 
 ### Build and Test Validation
@@ -724,8 +973,9 @@ grep -r "AddOpenTelemetry" src/WorkerService.Worker/
 grep -r "AddAspNetCoreInstrumentation" src/WorkerService.Worker/
 grep -r "AddMeter" src/WorkerService.Worker/
 
-# Check for required instrumentation
+# Check for required instrumentation and manual mapping usage
 grep -r "AddEntityFrameworkCoreInstrumentation\|AddHttpClientInstrumentation\|AddSqlClientInstrumentation" src/WorkerService.Worker/
+grep -r "ToResponseDto\|ToEntity\|ToCreateResult" src/WorkerService.Application/
 ```
 
 ### Clean Architecture Compliance Validation
@@ -780,12 +1030,14 @@ curl -X POST http://localhost:5000/api/orders \
     "items": [{"productId": "test", "quantity": 1, "unitPrice": 10.00}]
   }'
 
-# Check logs for MassTransit message publishing
+# Check logs for MassTransit message publishing and manual mapping usage
 sleep 5
 kill $APP_PID
 
-# Verify no exceptions in logs
+# Verify no exceptions in logs and check for proper mapping usage
 grep -i "exception\|error" logs/* || echo "No exceptions found in logs"
+echo "Verifying manual mapping is used instead of AutoMapper..."
+grep -r "AutoMapper\|IMapper" src/ && echo "WARNING: AutoMapper references found" || echo "✅ No AutoMapper dependencies found"
 ```
 
 ---
@@ -801,13 +1053,26 @@ public class OrdersControllerTests
     private readonly Mock<IMediator> _mediatorMock;
     private readonly Mock<IValidator<CreateOrderCommand>> _validatorMock;
     private readonly OrdersController _controller;
+    private readonly Mock<ILogger<OrdersController>> _loggerMock;
+
+    public OrdersControllerTests()
+    {
+        _mediatorMock = new Mock<IMediator>();
+        _validatorMock = new Mock<IValidator<CreateOrderCommand>>();
+        _loggerMock = new Mock<ILogger<OrdersController>>();
+        _controller = new OrdersController(_mediatorMock.Object, _validatorMock.Object, 
+            new Mock<IValidator<UpdateOrderCommand>>().Object, _loggerMock.Object);
+    }
 
     [Fact]
     public async Task CreateOrder_WithValidCommand_ReturnsCreatedResult()
     {
         // Arrange
-        var command = new CreateOrderCommand("customer-1", new List<OrderItemDto>());
-        var result = new CreateOrderResult(Guid.NewGuid(), "customer-1", 100m, DateTime.UtcNow);
+        var command = new CreateOrderCommand("customer-1", new List<OrderItemDto>
+        {
+            new("product-1", 2, 29.99m)
+        });
+        var result = new CreateOrderResult(Guid.NewGuid(), "customer-1", 59.98m, DateTime.UtcNow);
         
         _validatorMock.Setup(x => x.ValidateAsync(command, default))
                      .ReturnsAsync(new ValidationResult());
@@ -820,6 +1085,27 @@ public class OrdersControllerTests
         // Assert
         var createdResult = Assert.IsType<CreatedAtActionResult>(response);
         Assert.Equal(201, createdResult.StatusCode);
+        Assert.Equal(result, createdResult.Value);
+    }
+    
+    [Fact]
+    public async Task GetOrder_WithExistingId_ReturnsOrderDto()
+    {
+        // Arrange
+        var orderId = Guid.NewGuid();
+        var orderDto = new OrderResponseDto(
+            orderId, "customer-1", DateTime.UtcNow, "Pending", 59.98m, 
+            new[] { new OrderItemResponseDto(Guid.NewGuid(), "product-1", 2, 29.99m, 59.98m) });
+        
+        _mediatorMock.Setup(x => x.Send(It.Is<GetOrderQuery>(q => q.OrderId == orderId), default))
+                     .ReturnsAsync(orderDto);
+
+        // Act
+        var response = await _controller.GetOrder(orderId, default);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(response);
+        Assert.Equal(orderDto, okResult.Value);
     }
 }
 ```
@@ -828,13 +1114,72 @@ public class OrdersControllerTests
 ```csharp
 public class CreateOrderCommandHandlerTests
 {
+    private readonly Mock<IOrderRepository> _repositoryMock;
+    private readonly Mock<IPublishEndpoint> _publishEndpointMock;
+    private readonly Mock<ILogger<CreateOrderCommandHandler>> _loggerMock;
+    private readonly CreateOrderCommandHandler _handler;
+
+    public CreateOrderCommandHandlerTests()
+    {
+        _repositoryMock = new Mock<IOrderRepository>();
+        _publishEndpointMock = new Mock<IPublishEndpoint>();
+        _loggerMock = new Mock<ILogger<CreateOrderCommandHandler>>();
+        _handler = new CreateOrderCommandHandler(
+            _repositoryMock.Object, _publishEndpointMock.Object, _loggerMock.Object);
+    }
+
     [Fact]
     public async Task Handle_ValidCommand_CreatesOrderAndPublishesEvent()
     {
-        // Test command handler logic in isolation
-        // Verify repository calls
+        // Arrange
+        var command = new CreateOrderCommand("customer-1", new List<OrderItemDto>
+        {
+            new("product-1", 2, 29.99m)
+        });
+
+        _repositoryMock.Setup(x => x.AddAsync(It.IsAny<Order>(), default))
+                      .Returns(Task.CompletedTask);
+        _repositoryMock.Setup(x => x.SaveChangesAsync(default))
+                      .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _handler.Handle(command, default);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(command.CustomerId, result.CustomerId);
+        Assert.Equal(59.98m, result.TotalAmount);
+        
+        // Verify repository interactions
+        _repositoryMock.Verify(x => x.AddAsync(It.IsAny<Order>(), default), Times.Once);
+        _repositoryMock.Verify(x => x.SaveChangesAsync(default), Times.Once);
+        
         // Verify message publishing
-        // Verify domain event handling
+        _publishEndpointMock.Verify(x => x.Publish(It.IsAny<IDomainEvent>(), default), Times.AtLeastOnce);
+    }
+    
+    [Fact]
+    public void ToEntity_ValidCommand_CreatesOrderWithCorrectProperties()
+    {
+        // Arrange
+        var command = new CreateOrderCommand("customer-1", new List<OrderItemDto>
+        {
+            new("product-1", 2, 29.99m),
+            new("product-2", 1, 15.50m)
+        });
+
+        // Act
+        var order = command.ToEntity();
+
+        // Assert
+        Assert.Equal(command.CustomerId, order.CustomerId);
+        Assert.Equal(2, order.Items.Count());
+        Assert.Equal(75.48m, order.TotalAmount.Amount); // (2 * 29.99) + (1 * 15.50)
+        
+        var items = order.Items.ToList();
+        Assert.Equal("product-1", items[0].ProductId);
+        Assert.Equal(2, items[0].Quantity);
+        Assert.Equal(29.99m, items[0].UnitPrice.Amount);
     }
 }
 ```
@@ -848,10 +1193,51 @@ public class OrdersApiIntegrationTests : IClassFixture<TestWebApplicationFactory
     [Fact]
     public async Task CreateOrder_EndToEnd_CreatesOrderAndPublishesMessage()
     {
-        // Test full HTTP request/response cycle
+        // Arrange
+        var client = _factory.CreateClient();
+        var command = new
+        {
+            customerId = "integration-test-customer",
+            items = new[]
+            {
+                new { productId = "test-product-1", quantity = 1, unitPrice = 25.99 },
+                new { productId = "test-product-2", quantity = 3, unitPrice = 15.75 }
+            }
+        };
+        
+        var content = new StringContent(
+            JsonSerializer.Serialize(command), 
+            Encoding.UTF8, 
+            "application/json");
+
+        // Act
+        var response = await client.PostAsync("/api/orders", content);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<CreateOrderResult>(responseContent, 
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        
+        Assert.NotNull(result);
+        Assert.Equal(command.customerId, result.CustomerId);
+        Assert.Equal(73.24m, result.TotalAmount); // (1 * 25.99) + (3 * 15.75)
+        
         // Verify database persistence
-        // Verify message publishing
-        // Verify OpenTelemetry traces
+        using var scope = _factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var createdOrder = await dbContext.Orders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == result.OrderId);
+        
+        Assert.NotNull(createdOrder);
+        Assert.Equal(command.customerId, createdOrder.CustomerId);
+        Assert.Equal(2, createdOrder.Items.Count());
+        
+        // Verify message publishing (check test harness)
+        var publishEndpoint = scope.ServiceProvider.GetRequiredService<IPublishEndpoint>();
+        // Additional message verification logic would go here
     }
 }
 ```
@@ -1058,7 +1444,7 @@ services:
 ### Week 2: Core Implementation
 - [ ] CQRS command/query handlers
 - [ ] FluentValidation validators
-- [ ] AutoMapper configurations
+- [ ] Manual mapping extension methods
 - [ ] Repository enhancements
 
 ### Week 3: API Development
@@ -1086,6 +1472,7 @@ services:
 ### Code Quality
 - [ ] All code follows Clean Architecture principles
 - [ ] SOLID principles applied throughout
+- [ ] Manual mapping extensions implemented with null safety
 - [ ] Comprehensive error handling implemented
 - [ ] Logging and tracing configured
 - [ ] Input validation on all endpoints
@@ -1119,7 +1506,7 @@ services:
 - [ ] FluentValidation validators for all API inputs
 - [ ] OrdersController with full CRUD operations (POST, GET, PUT, DELETE)
 - [ ] Database migrations for Order/OrderItem tables
-- [ ] AutoMapper profiles for entity-DTO conversion
+- [ ] Manual mapping extensions for entity-DTO conversion
 - [ ] Native OpenAPI documentation accessible at `/openapi/v1.json`
 - [ ] Swagger UI available at `/swagger` (development only)
 
@@ -1149,8 +1536,14 @@ services:
 
 ## Conclusion
 
-This PRP provides a comprehensive roadmap for implementing production-ready CRUD API endpoints in a .NET 9 Worker Service while maintaining strict Clean Architecture principles. The implementation leverages the latest .NET 9 patterns including native OpenAPI support, hybrid worker-web hosting, and modern observability practices.
+This PRP provides a comprehensive roadmap for implementing production-ready CRUD API endpoints in a .NET 9 Worker Service while maintaining strict Clean Architecture principles. The implementation leverages the latest .NET 9 patterns including native OpenAPI support, hybrid worker-web hosting, manual mapping extensions for optimal performance, and modern observability practices.
+
+Key architectural decisions include:
+- **Manual mapping extensions** instead of AutoMapper for better performance, maintainability, and compliance with .NET 9 best practices
+- **Static extension methods** with null safety and efficient object conversions
+- **Clean separation** of mapping logic in Application layer following DDD principles
+- **No external mapping dependencies** reducing package bloat and improving startup performance
 
 The detailed validation gates ensure successful implementation, while the production considerations address real-world deployment scenarios. The phased approach minimizes risk while delivering incremental value.
 
-**Expected Outcome**: A robust, scalable, and maintainable API layer that seamlessly integrates with existing background processing capabilities, providing a unified platform for order management operations.
+**Expected Outcome**: A robust, scalable, and maintainable API layer that seamlessly integrates with existing background processing capabilities, providing a unified platform for order management operations with optimized object mapping and minimal external dependencies.

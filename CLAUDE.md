@@ -40,6 +40,7 @@ src/
 - ❌ Put business logic in Infrastructure layer
 - ❌ Bypass Application layer from Worker
 - ❌ Create circular dependencies between projects
+- ❌ Do not use AutoMapper or any other mapping libraries. Do manual mapping instead.
 
 ## 🚌 MassTransit Integration Standards
 
