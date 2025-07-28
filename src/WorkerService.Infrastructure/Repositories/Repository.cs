@@ -34,14 +34,13 @@ public class Repository<T> : IRepository<T> where T : class
     public virtual async Task<T> AddAsync(T entity, CancellationToken cancellationToken = default)
     {
         await DbSet.AddAsync(entity, cancellationToken);
-        await Context.SaveChangesAsync(cancellationToken);
         return entity;
     }
 
     public virtual async Task UpdateAsync(T entity, CancellationToken cancellationToken = default)
     {
         DbSet.Update(entity);
-        await Context.SaveChangesAsync(cancellationToken);
+        await Task.CompletedTask; // Keeping async signature for consistency
     }
 
     public virtual async Task DeleteAsync(T entity, CancellationToken cancellationToken = default)
@@ -53,5 +52,10 @@ public class Repository<T> : IRepository<T> where T : class
     public virtual async Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await DbSet.FindAsync(new object[] { id }, cancellationToken) != null;
+    }
+
+    public virtual async Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        await Context.SaveChangesAsync(cancellationToken);
     }
 }

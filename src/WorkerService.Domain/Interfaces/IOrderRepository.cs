@@ -8,4 +8,5 @@ public interface IOrderRepository : IRepository<Order>
     Task<IEnumerable<Order>> GetOrdersByCustomerAsync(string customerId, CancellationToken cancellationToken = default);
     Task<IEnumerable<Order>> GetOrdersByStatusAsync(OrderStatus status, CancellationToken cancellationToken = default);
     Task<IEnumerable<Order>> GetOrdersCreatedBetweenAsync(DateTime startDate, DateTime endDate, CancellationToken cancellationToken = default);
+    Task<(IEnumerable<Order> Orders, int TotalCount)> GetPagedAsync(int pageNumber, int pageSize, string? customerId = null, CancellationToken cancellationToken = default);
 }

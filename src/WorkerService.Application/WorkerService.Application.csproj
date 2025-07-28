@@ -16,6 +16,7 @@
     <PackageReference Include="FluentValidation" Version="11.9.0" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.9.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+    <PackageReference Include="MassTransit.Abstractions" Version="8.3.3" />
   </ItemGroup>
 
 </Project>

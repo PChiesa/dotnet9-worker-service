@@ -11,4 +11,5 @@ public interface IRepository<T> where T : class
     Task UpdateAsync(T entity, CancellationToken cancellationToken = default);
     Task DeleteAsync(T entity, CancellationToken cancellationToken = default);
     Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken = default);
+    Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

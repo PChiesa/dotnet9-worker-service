@@ -44,4 +44,29 @@ public class OrderRepository : Repository<Order>, IOrderRepository
             .OrderBy(o => o.OrderDate)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<(IEnumerable<Order> Orders, int TotalCount)> GetPagedAsync(
+        int pageNumber, 
+        int pageSize, 
+        string? customerId = null, 
+        CancellationToken cancellationToken = default)
+    {
+        var query = DbSet.Include(o => o.Items).AsQueryable();
+        
+        // Apply customer filter if provided
+        if (!string.IsNullOrWhiteSpace(customerId))
+        {
+            query = query.Where(o => o.CustomerId == customerId);
+        }
+        
+        var totalCount = await query.CountAsync(cancellationToken);
+        var orders = await query
+            .OrderByDescending(o => o.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+        
+        return (orders, totalCount);
+    }
+
 }

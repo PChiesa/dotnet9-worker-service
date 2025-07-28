@@ -24,7 +24,32 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
     .CreateLogger();
 
-try
+// For testing environments, don't catch exceptions to allow test framework to handle them
+var isTestEnvironment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Test" ||
+                       Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") == "Test";
+
+if (!isTestEnvironment)
+{
+    try
+    {
+        await CreateAndRunApplication(args);
+    }
+    catch (Exception ex)
+    {
+        Log.Fatal(ex, "Application terminated unexpectedly");
+    }
+    finally
+    {
+        Log.CloseAndFlush();
+    }
+}
+else
+{
+    // In test environment, let exceptions bubble up for proper test diagnostics
+    await CreateAndRunApplication(args);
+}
+
+static async Task CreateAndRunApplication(string[] args)
 {
     var builder = WebApplication.CreateBuilder(args);
 
@@ -54,16 +79,29 @@ try
                 ["in_memory.message_broker"] = inMemorySettings.UseMessageBroker
             }))
         .WithTracing(tracing => tracing
-            .AddAspNetCoreInstrumentation()
+            .AddAspNetCoreInstrumentation(options =>
+            {
+                options.EnrichWithHttpRequest = (activity, request) =>
+                {
+                    activity.SetTag("http.route", request.Path);
+                    activity.SetTag("user.id", request.Headers["X-User-Id"].ToString());
+                };
+                options.EnrichWithHttpResponse = (activity, response) =>
+                {
+                    activity.SetTag("http.response.status_code", response.StatusCode);
+                };
+            })
             .AddHttpClientInstrumentation()
             .AddEntityFrameworkCoreInstrumentation()
             .AddSqlClientInstrumentation()
             .AddSource("MassTransit")
+            .AddSource("OrdersAPI")
             .AddOtlpExporter())
         .WithMetrics(metrics => metrics
             .AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
             .AddMeter("MassTransit")
+            .AddMeter("OrdersAPI")
             .AddPrometheusExporter());
 
     // Configure Entity Framework with conditional provider
@@ -124,6 +162,38 @@ try
     // Register FluentValidation
     builder.Services.AddValidatorsFromAssemblyContaining<CreateOrderCommandHandler>();
 
+    // Configure Web API
+    builder.Services.AddControllers();
+    builder.Services.AddEndpointsApiExplorer();
+
+    // Configure .NET 9 Native OpenAPI
+    builder.Services.AddOpenApi();
+
+    // Add Swagger generation (optional, for development UI)
+    if (builder.Environment.IsDevelopment())
+    {
+        builder.Services.AddSwaggerGen(c =>
+        {
+            c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo 
+            { 
+                Title = "Orders API", 
+                Version = "v1",
+                Description = "RESTful API for Order management in .NET 9 Worker Service"
+            });
+        });
+    }
+
+    // Configure CORS for development
+    builder.Services.AddCors(options =>
+    {
+        options.AddDefaultPolicy(policy =>
+        {
+            policy.WithOrigins("http://localhost:3000", "https://localhost:3001")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+    });
+
     // Register background services
     builder.Services.AddHostedService<OrderProcessingService>();
     builder.Services.AddHostedService<MetricsCollectionService>();
@@ -146,6 +216,18 @@ try
     }
 
     var app = builder.Build();
+
+    // Configure middleware pipeline
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI(c =>
+        {
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "Orders API v1");
+            c.RoutePrefix = "swagger";
+        });
+        app.UseCors();
+    }
 
     // Log configuration for debugging (conditionally enabled)
     if (builder.Environment.IsDevelopment() || 
@@ -172,6 +254,10 @@ try
         Predicate = _ => false
     });
 
+    // Map API endpoints
+    app.MapControllers();
+    app.MapOpenApi(); // .NET 9 native OpenAPI endpoint
+
     // Configure Prometheus metrics endpoint
     app.UseOpenTelemetryPrometheusScrapingEndpoint();
 
@@ -184,14 +270,6 @@ try
 
     Log.Information("Starting WorkerService application");
     await app.RunAsync();
-}
-catch (Exception ex)
-{
-    Log.Fatal(ex, "Application terminated unexpectedly");
-}
-finally
-{
-    Log.CloseAndFlush();
 }
 
 // Make Program class accessible for integration tests

@@ -15,7 +15,12 @@
     <PackageReference Include="coverlet.collector" Version="6.0.2" />
     <PackageReference Include="Moq" Version="4.20.69" />
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.4" />
+    <PackageReference Include="MassTransit.TestFramework" Version="8.5.0" />
+    <PackageReference Include="FluentValidation" Version="11.11.0" />
+    <PackageReference Include="MediatR" Version="11.1.0" />
     
     <!-- Security vulnerability overrides -->
     <PackageReference Include="System.Net.Http" Version="4.3.4" />
@@ -25,6 +30,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\WorkerService.Domain\WorkerService.Domain.csproj" />
     <ProjectReference Include="..\..\src\WorkerService.Application\WorkerService.Application.csproj" />
+    <ProjectReference Include="..\..\src\WorkerService.Worker\WorkerService.Worker.csproj" />
+    <ProjectReference Include="..\..\src\WorkerService.Infrastructure\WorkerService.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

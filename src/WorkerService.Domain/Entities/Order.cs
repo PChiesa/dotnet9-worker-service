@@ -108,6 +108,48 @@ public class Order
         _domainEvents.Add(new OrderCancelledEvent(Id, CustomerId));
     }
 
+    public void UpdateCustomerId(string customerId)
+    {
+        if (string.IsNullOrWhiteSpace(customerId))
+            throw new ArgumentException("Customer ID cannot be empty", nameof(customerId));
+
+        CustomerId = customerId;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void AddItem(OrderItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        
+        if (Status != OrderStatus.Pending)
+            throw new InvalidOperationException("Can only add items to pending orders");
+
+        _items.Add(item);
+        TotalAmount = CalculateTotalAmount();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ClearItems()
+    {
+        if (Status != OrderStatus.Pending)
+            throw new InvalidOperationException("Can only clear items from pending orders");
+
+        _items.Clear();
+        TotalAmount = new Money(0);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void MarkAsDeleted()
+    {
+        if (Status == OrderStatus.Delivered)
+            throw new InvalidOperationException("Cannot delete delivered orders");
+
+        Status = OrderStatus.Cancelled;
+        UpdatedAt = DateTime.UtcNow;
+        
+        _domainEvents.Add(new OrderCancelledEvent(Id, CustomerId));
+    }
+
     public void ClearDomainEvents()
     {
         _domainEvents.Clear();

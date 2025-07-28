@@ -1,47 +1,75 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
+using MassTransit;
 using WorkerService.Application.Commands;
-using WorkerService.Domain.Entities;
+using WorkerService.Application.Common.Extensions;
 using WorkerService.Domain.Interfaces;
-using WorkerService.Domain.ValueObjects;
+using WorkerService.Application.Common.Metrics;
 
 namespace WorkerService.Application.Handlers;
 
 public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, CreateOrderResult>
 {
     private readonly IOrderRepository _orderRepository;
+    private readonly IPublishEndpoint _publishEndpoint;
     private readonly ILogger<CreateOrderCommandHandler> _logger;
 
     public CreateOrderCommandHandler(
         IOrderRepository orderRepository,
+        IPublishEndpoint publishEndpoint,
         ILogger<CreateOrderCommandHandler> logger)
     {
         _orderRepository = orderRepository;
+        _publishEndpoint = publishEndpoint;
         _logger = logger;
     }
 
     public async Task<CreateOrderResult> Handle(CreateOrderCommand request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Creating order for customer {CustomerId}", request.CustomerId);
+        using var activity = OrderApiMetrics.ActivitySource.StartActivity("CreateOrder");
+        activity?.SetTag("order.customer_id", request.CustomerId);
+        
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        
+        try
+        {
+            _logger.LogInformation("Creating order for customer {CustomerId}", request.CustomerId);
 
-        // Convert DTOs to domain entities
-        var orderItems = request.Items.Select(item => 
-            new OrderItem(item.ProductId, item.Quantity, new Money(item.UnitPrice))).ToList();
+            // Create order entity using manual mapping
+            var order = request.ToEntity();
+            
+            // Save to database
+            await _orderRepository.AddAsync(order, cancellationToken);
+            await _orderRepository.SaveChangesAsync(cancellationToken);
+            
+            _logger.LogInformation("Order {OrderId} created for customer {CustomerId}", 
+                order.Id, order.CustomerId);
 
-        // Create domain entity
-        var order = new Order(request.CustomerId, orderItems);
+            // Publish domain events
+            foreach (var domainEvent in order.DomainEvents)
+            {
+                await _publishEndpoint.Publish(domainEvent, cancellationToken);
+                _logger.LogDebug("Published domain event {EventType} for order {OrderId}", 
+                    domainEvent.GetType().Name, order.Id);
+            }
+            
+            order.ClearDomainEvents();
 
-        // Persist to database
-        await _orderRepository.AddAsync(order, cancellationToken);
+            // Record metrics
+            OrderApiMetrics.OrdersCreated.Add(1, 
+                new KeyValuePair<string, object?>("customer_id", request.CustomerId));
 
-        _logger.LogInformation("Order {OrderId} created successfully for customer {CustomerId}", 
-            order.Id, request.CustomerId);
-
-        // Return result
-        return new CreateOrderResult(
-            order.Id,
-            order.CustomerId,
-            order.TotalAmount.Amount,
-            order.OrderDate);
+            return order.ToCreateResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create order for customer {CustomerId}", request.CustomerId);
+            throw;
+        }
+        finally
+        {
+            stopwatch.Stop();
+            OrderApiMetrics.OrderCreationDuration.Record(stopwatch.ElapsedMilliseconds);
+        }
     }
 }
