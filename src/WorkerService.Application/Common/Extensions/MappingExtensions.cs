@@ -1,4 +1,5 @@
 using WorkerService.Application.Commands;
+using WorkerService.Application.Common.DTOs;
 using WorkerService.Application.Queries;
 using WorkerService.Domain.Entities;
 using WorkerService.Domain.ValueObjects;
@@ -145,3 +146,33 @@ public record PagedOrdersResult(
     int PageSize,
     bool HasNextPage,
     bool HasPreviousPage);
+
+/// <summary>
+/// Manual mapping extensions for Item entity-DTO conversion following Clean Architecture principles.
+/// Uses static extension methods for efficient, maintainable conversions without external dependencies.
+/// </summary>
+public static class ItemMappingExtensions
+{
+    /// <summary>
+    /// Converts Item entity to ItemDto for API responses
+    /// </summary>
+    public static ItemDto ToDto(this Item item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        
+        return new ItemDto(
+            item.Id,
+            item.SKU.Value,
+            item.Name,
+            item.Description,
+            item.Price.Amount,
+            item.Price.Currency,
+            item.StockLevel.Available,
+            item.StockLevel.Reserved,
+            item.Category,
+            item.IsActive,
+            item.CreatedAt,
+            item.UpdatedAt
+        );
+    }
+}

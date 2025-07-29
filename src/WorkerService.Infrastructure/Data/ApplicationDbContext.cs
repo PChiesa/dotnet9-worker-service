@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using WorkerService.Domain.Entities;
 using WorkerService.Domain.ValueObjects;
+using WorkerService.Infrastructure.Data.Configurations;
 
 namespace WorkerService.Infrastructure.Data;
 
@@ -12,10 +13,15 @@ public class ApplicationDbContext : DbContext
 
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<Item> Items => Set<Item>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // Apply entity configurations
+        modelBuilder.ApplyConfiguration(new ItemConfiguration());
+        modelBuilder.ApplyConfiguration(new OrderItemConfiguration());
 
         // Configure Order entity
         modelBuilder.Entity<Order>(entity =>
@@ -62,28 +68,5 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(e => e.OrderDate);
         });
 
-        // Configure OrderItem entity
-        modelBuilder.Entity<OrderItem>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-
-            entity.Property(e => e.ProductId)
-                .IsRequired()
-                .HasMaxLength(50);
-
-            entity.Property(e => e.Quantity)
-                .IsRequired();
-
-            entity.OwnsOne(e => e.UnitPrice, money =>
-            {
-                money.Property(m => m.Amount)
-                    .HasColumnName("UnitPrice")
-                    .HasPrecision(18, 2)
-                    .IsRequired();
-            });
-
-            // Configure indexes
-            entity.HasIndex(e => e.ProductId);
-        });
     }
 }

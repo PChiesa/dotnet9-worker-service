@@ -12,6 +12,7 @@ using WorkerService.Infrastructure.Consumers;
 using WorkerService.Infrastructure.Data;
 using WorkerService.Infrastructure.Repositories;
 using WorkerService.Worker.Configuration;
+using WorkerService.Worker.Endpoints;
 using WorkerService.Worker.Health;
 using WorkerService.Worker.Services;
 
@@ -88,12 +89,14 @@ static async Task CreateAndRunApplication(string[] args)
                 .AddSqlClientInstrumentation()
                 .AddSource("MassTransit")
                 .AddSource("OrdersAPI")
+                .AddSource("ItemsAPI")
                 .AddOtlpExporter())
             .WithMetrics(metrics => metrics
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddMeter("MassTransit")
                 .AddMeter("OrdersAPI")
+                .AddMeter("ItemsAPI")
                 .AddPrometheusExporter());
     }
 
@@ -148,6 +151,7 @@ static async Task CreateAndRunApplication(string[] args)
 
     // Register repositories
     builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+    builder.Services.AddScoped<IItemRepository, ItemRepository>();
 
     // Register MediatR
     builder.Services.AddMediatR(typeof(CreateOrderCommandHandler).Assembly);
@@ -258,6 +262,13 @@ static async Task CreateAndRunApplication(string[] args)
 
     // Map API endpoints
     app.MapControllers();
+    
+    // Map Item API endpoints using minimal APIs
+    app.MapGroup("/api/items")
+        .WithTags("Items")
+        .WithOpenApi()
+        .MapItemEndpoints();
+        
     app.MapOpenApi(); // .NET 9 native OpenAPI endpoint
 
     // Configure Prometheus metrics endpoint conditionally
