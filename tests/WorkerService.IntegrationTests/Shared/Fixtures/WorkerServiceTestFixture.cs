@@ -4,7 +4,7 @@ using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Xunit;
 
-namespace WorkerService.IntegrationTests.Fixtures;
+namespace WorkerService.IntegrationTests.Shared.Fixtures;
 
 public class WorkerServiceTestFixture : IAsyncLifetime
 {

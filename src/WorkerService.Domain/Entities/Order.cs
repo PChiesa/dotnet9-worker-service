@@ -19,7 +19,7 @@ public class Order
     private readonly List<IDomainEvent> _domainEvents = new();
     public IReadOnlyList<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
 
-    private Order() { } // EF Core constructor
+    public Order() { } // EF Core constructor
 
     public Order(string customerId, IEnumerable<OrderItem> items)
     {

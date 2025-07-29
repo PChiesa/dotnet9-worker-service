@@ -63,15 +63,15 @@ public class OrdersController : ControllerBase
             }
 
             var result = await _mediator.Send(command, cancellationToken);
-            
+
             _logger.LogInformation("Order {OrderId} created successfully via API", result.OrderId);
-            
+
             return CreatedAtAction(nameof(GetOrder), new { id = result.OrderId }, result);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create order for customer {CustomerId}", command.CustomerId);
-            return StatusCode(StatusCodes.Status500InternalServerError, 
+            return StatusCode(StatusCodes.Status500InternalServerError,
                 new { message = "An error occurred while creating the order" });
         }
     }
@@ -90,11 +90,14 @@ public class OrdersController : ControllerBase
     {
         try
         {
+            if (id == Guid.Empty)
+                throw new ArgumentException("Order ID cannot be empty", nameof(id));
+
             _logger.LogInformation("API request to get order {OrderId}", id);
 
             var query = new GetOrderQuery(id);
             var result = await _mediator.Send(query, cancellationToken);
-            
+
             if (result == null)
             {
                 _logger.LogWarning("Order {OrderId} not found via API", id);
@@ -106,7 +109,7 @@ public class OrdersController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to retrieve order {OrderId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError, 
+            return StatusCode(StatusCodes.Status500InternalServerError,
                 new { message = "An error occurred while retrieving the order" });
         }
     }
@@ -142,18 +145,18 @@ public class OrdersController : ControllerBase
                 return BadRequest(new { message = "Page size must be between 1 and 100" });
             }
 
-            _logger.LogInformation("API request to get orders - Page: {PageNumber}, Size: {PageSize}, Customer: {CustomerId}", 
+            _logger.LogInformation("API request to get orders - Page: {PageNumber}, Size: {PageSize}, Customer: {CustomerId}",
                 pageNumber, pageSize, customerId ?? "all");
 
             var query = new GetOrdersQuery(pageNumber, pageSize, customerId);
             var result = await _mediator.Send(query, cancellationToken);
-            
+
             return Ok(result);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to retrieve orders list");
-            return StatusCode(StatusCodes.Status500InternalServerError, 
+            return StatusCode(StatusCodes.Status500InternalServerError,
                 new { message = "An error occurred while retrieving orders" });
         }
     }
@@ -196,7 +199,7 @@ public class OrdersController : ControllerBase
             }
 
             var result = await _mediator.Send(command, cancellationToken);
-            
+
             if (result == null)
             {
                 _logger.LogWarning("Order {OrderId} not found for update via API", id);
@@ -204,13 +207,13 @@ public class OrdersController : ControllerBase
             }
 
             _logger.LogInformation("Order {OrderId} updated successfully via API", id);
-            
+
             return Ok(result);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to update order {OrderId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError, 
+            return StatusCode(StatusCodes.Status500InternalServerError,
                 new { message = "An error occurred while updating the order" });
         }
     }
@@ -233,7 +236,7 @@ public class OrdersController : ControllerBase
 
             var command = new DeleteOrderCommand(id);
             var result = await _mediator.Send(command, cancellationToken);
-            
+
             if (!result)
             {
                 _logger.LogWarning("Order {OrderId} not found for deletion via API", id);
@@ -241,13 +244,13 @@ public class OrdersController : ControllerBase
             }
 
             _logger.LogInformation("Order {OrderId} deleted successfully via API", id);
-            
+
             return NoContent();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to delete order {OrderId}", id);
-            return StatusCode(StatusCodes.Status500InternalServerError, 
+            return StatusCode(StatusCodes.Status500InternalServerError,
                 new { message = "An error occurred while deleting the order" });
         }
     }

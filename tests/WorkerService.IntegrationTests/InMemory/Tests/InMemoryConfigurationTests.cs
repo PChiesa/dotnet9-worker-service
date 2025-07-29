@@ -9,7 +9,7 @@ using WorkerService.Infrastructure.Consumers;
 using WorkerService.Worker.Configuration;
 using Xunit;
 
-namespace WorkerService.IntegrationTests.Tests;
+namespace WorkerService.IntegrationTests.InMemory.Tests;
 
 public class InMemoryConfigurationTests : IAsyncLifetime
 {

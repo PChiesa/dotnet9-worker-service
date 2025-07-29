@@ -6,24 +6,25 @@ using Microsoft.Extensions.Logging;
 using WorkerService.Infrastructure.Data;
 using WorkerService.Domain.Events;
 using WorkerService.Infrastructure.Consumers;
-using WorkerService.IntegrationTests.Fixtures;
-using WorkerService.IntegrationTests.Utilities;
+using WorkerService.IntegrationTests.Container.Fixtures;
+using WorkerService.IntegrationTests.Shared.Fixtures;
+using WorkerService.IntegrationTests.Shared.Utilities;
 using Xunit;
 using Xunit.Abstractions;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 
-namespace WorkerService.IntegrationTests.Tests;
+namespace WorkerService.IntegrationTests.Container.Tests;
 
-[Collection("Integration Tests")]
-public class MessageFlowIntegrationTests : IClassFixture<WorkerServiceTestFixture>, IAsyncLifetime
+[Collection("Container Integration Tests")]
+public class MessageFlowContainerTests : IClassFixture<WorkerServiceTestFixture>, IAsyncLifetime
 {
     private readonly WorkerServiceTestFixture _fixture;
     private readonly ITestOutputHelper _output;
-    private TestWebApplicationFactory? _factory;
+    private ContainerWebApplicationFactory? _factory;
     private IServiceScope? _scope;
 
-    public MessageFlowIntegrationTests(WorkerServiceTestFixture fixture, ITestOutputHelper output)
+    public MessageFlowContainerTests(WorkerServiceTestFixture fixture, ITestOutputHelper output)
     {
         _fixture = fixture;
         _output = output;
@@ -31,7 +32,7 @@ public class MessageFlowIntegrationTests : IClassFixture<WorkerServiceTestFixtur
 
     public async Task InitializeAsync()
     {
-        _factory = new TestWebApplicationFactory(_fixture);
+        _factory = new ContainerWebApplicationFactory(_fixture);
         await _factory.InitializeAsync();
         _scope = _factory.Services.CreateScope();
     }

@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using WorkerService.Domain.Entities;
 using WorkerService.Infrastructure.Data;
 
-namespace WorkerService.IntegrationTests.Utilities;
+namespace WorkerService.IntegrationTests.Shared.Utilities;
 
 public class DatabaseAssertions
 {

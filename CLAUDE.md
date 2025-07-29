@@ -41,6 +41,7 @@ src/
 - ❌ Bypass Application layer from Worker
 - ❌ Create circular dependencies between projects
 - ❌ Do not use AutoMapper or any other mapping libraries. Do manual mapping instead.
+- ❌ Do not use Controllers for api endpoints, ALWAYS create minimal apis.
 
 ## 🚌 MassTransit Integration Standards
 
@@ -177,11 +178,15 @@ app.MapHealthChecks("/health");
 ### Unit Testing
 - **Always create unit tests** for domain entities and application handlers
 - **Use xUnit** as the testing framework
-- **Mock external dependencies** using Moq or NSubstitute
+- **Mock external dependencies** using Moq
+- **Use FluentAssertions** as assertion library
 - **Test business logic in isolation**
 
 ### Integration Testing
+- **Use WebApplicationFactory<Program>** for fixture. You may have multiple `WebApplicationFactory<Program>` for different integration testing scenarios, like when testing with docker containers and when running all in-memory.
+- **DO NOT Customize Dependency Injection within Integration Test Fixtures** you can only modify environment variables or settings from `appsettings.Test.json`. The testing application needs to be as close as possible to the real application when testing to avoid false positives.
 - **Use MassTransit.TestFramework** for message testing
+- **Use in-memory message broker** for application integration tests
 - **Use in-memory database** for data access testing
 - **Test end-to-end workflows** with test harness
 

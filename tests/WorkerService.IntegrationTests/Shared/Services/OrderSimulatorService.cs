@@ -6,7 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using WorkerService.Application.Commands;
 
-namespace WorkerService.IntegrationTests.Services;
+namespace WorkerService.IntegrationTests.Shared.Services;
 
 public class OrderSimulatorService : BackgroundService
 {

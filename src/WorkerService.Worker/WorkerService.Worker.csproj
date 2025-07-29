@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+     <InternalsVisibleTo Include="WorkerService.IntegrationTests" />
+</ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\WorkerService.Infrastructure\WorkerService.Infrastructure.csproj" />
     <ProjectReference Include="..\WorkerService.Application\WorkerService.Application.csproj" />
   </ItemGroup>

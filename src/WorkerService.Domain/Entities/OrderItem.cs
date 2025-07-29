@@ -11,7 +11,7 @@ public class OrderItem
     public Money UnitPrice { get; private set; }
     public Money TotalPrice => new Money(UnitPrice.Amount * Quantity);
 
-    private OrderItem() { } // EF Core constructor
+    public OrderItem() { } // EF Core constructor
 
     public OrderItem(string productId, int quantity, Money unitPrice)
     {

@@ -391,6 +391,7 @@ docker-compose.override.yml
 
 # Secrets
 appsettings.*.json
+!appsettings.Test.json
 !appsettings.json
 !appsettings.Development.json
 

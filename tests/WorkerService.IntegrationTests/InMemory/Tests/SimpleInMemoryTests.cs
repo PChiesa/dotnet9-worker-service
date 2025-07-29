@@ -5,41 +5,36 @@ using Microsoft.Extensions.DependencyInjection;
 using WorkerService.Application.Commands;
 using WorkerService.Domain.Entities;
 using WorkerService.Infrastructure.Data;
-using WorkerService.IntegrationTests.Fixtures;
-using WorkerService.IntegrationTests.Utilities;
+using WorkerService.IntegrationTests.InMemory.Fixtures;
+using WorkerService.IntegrationTests.Shared.Fixtures;
+using WorkerService.IntegrationTests.Shared.Utilities;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace WorkerService.IntegrationTests.Tests;
+namespace WorkerService.IntegrationTests.InMemory.Tests;
 
-[Collection("Integration Tests")]
-public class SimpleIntegrationTests : IClassFixture<WorkerServiceTestFixture>, IAsyncLifetime
+[Collection("InMemory Integration Tests")]
+public class SimpleInMemoryTests : IClassFixture<InMemoryWebApplicationFactory>, IAsyncLifetime
 {
-    private readonly WorkerServiceTestFixture _fixture;
+    private readonly InMemoryWebApplicationFactory _factory;
     private readonly ITestOutputHelper _output;
-    private TestWebApplicationFactory? _factory;
     private IServiceScope? _scope;
 
-    public SimpleIntegrationTests(WorkerServiceTestFixture fixture, ITestOutputHelper output)
+    public SimpleInMemoryTests(InMemoryWebApplicationFactory factory, ITestOutputHelper output)
     {
-        _fixture = fixture;
+        _factory = factory;
         _output = output;
     }
 
     public async Task InitializeAsync()
     {
-        _factory = new TestWebApplicationFactory(_fixture);
-        await _factory.InitializeAsync();
+        //await _factory.InitializeAsync();
         _scope = _factory.Services.CreateScope();
     }
 
     public async Task DisposeAsync()
     {
         _scope?.Dispose();
-        if (_factory != null)
-        {
-            await _factory.DisposeAsync();
-        }
     }
 
     [Fact]
@@ -112,10 +107,9 @@ public class SimpleIntegrationTests : IClassFixture<WorkerServiceTestFixture>, I
         var canConnectToDb = await dbContext.Database.CanConnectAsync();
         canConnectToDb.Should().BeTrue("Should be able to connect to test database");
 
-        // Assert - Containers are running
-        _output.WriteLine($"PostgreSQL: {_fixture.PostgreSqlContainer.GetConnectionString()}");
-        _output.WriteLine($"RabbitMQ: {_fixture.GetRabbitMqConnectionString()}");
-        _output.WriteLine($"Jaeger UI: {_fixture.GetJaegerUiUrl()}");
+        // Assert - In-memory providers are working
+        _output.WriteLine("Using in-memory database and message broker");
+        _output.WriteLine("All in-memory dependencies are accessible");
 
         _output.WriteLine("All dependencies are accessible");
     }

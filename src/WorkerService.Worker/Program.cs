@@ -2,10 +2,6 @@ using FluentValidation;
 using MassTransit;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using OpenTelemetry.Instrumentation.AspNetCore;
-using OpenTelemetry.Instrumentation.EntityFrameworkCore;
-using OpenTelemetry.Instrumentation.Http;
-using OpenTelemetry.Instrumentation.SqlClient;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -24,30 +20,9 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
     .CreateLogger();
 
-// For testing environments, don't catch exceptions to allow test framework to handle them
-var isTestEnvironment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Test" ||
-                       Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") == "Test";
 
-if (!isTestEnvironment)
-{
-    try
-    {
-        await CreateAndRunApplication(args);
-    }
-    catch (Exception ex)
-    {
-        Log.Fatal(ex, "Application terminated unexpectedly");
-    }
-    finally
-    {
-        Log.CloseAndFlush();
-    }
-}
-else
-{
-    // In test environment, let exceptions bubble up for proper test diagnostics
-    await CreateAndRunApplication(args);
-}
+await CreateAndRunApplication(args);
+
 
 static async Task CreateAndRunApplication(string[] args)
 {
@@ -60,49 +35,67 @@ static async Task CreateAndRunApplication(string[] args)
     // Configure strongly-typed settings
     builder.Services.Configure<InMemorySettings>(
         builder.Configuration.GetSection(InMemorySettings.SectionName));
+    builder.Services.Configure<BackgroundServicesSettings>(
+        builder.Configuration.GetSection(BackgroundServicesSettings.SectionName));
+    builder.Services.Configure<OpenTelemetrySettings>(
+        builder.Configuration.GetSection(OpenTelemetrySettings.SectionName));
+    builder.Services.Configure<HealthCheckSettings>(
+        builder.Configuration.GetSection(HealthCheckSettings.SectionName));
 
-    // Get in-memory settings for conditional registration
+    // Get configuration settings for conditional registration
     var inMemorySettings = builder.Configuration
         .GetSection(InMemorySettings.SectionName)
         .Get<InMemorySettings>() ?? new InMemorySettings();
+    var backgroundServiceSettings = builder.Configuration
+        .GetSection(BackgroundServicesSettings.SectionName)
+        .Get<BackgroundServicesSettings>() ?? new BackgroundServicesSettings();
+    var openTelemetrySettings = builder.Configuration
+        .GetSection(OpenTelemetrySettings.SectionName)
+        .Get<OpenTelemetrySettings>() ?? new OpenTelemetrySettings();
+    var healthCheckSettings = builder.Configuration
+        .GetSection(HealthCheckSettings.SectionName)
+        .Get<HealthCheckSettings>() ?? new HealthCheckSettings();
 
-    // Configure OpenTelemetry with in-memory configuration metadata
-    const string serviceName = "WorkerService";
-    builder.Services.AddOpenTelemetry()
-        .ConfigureResource(resource => resource
-            .AddService(serviceName)
-            .AddAttributes(new Dictionary<string, object>
-            {
-                ["service.version"] = "1.0.0",
-                ["deployment.environment"] = builder.Environment.EnvironmentName,
-                ["in_memory.database"] = inMemorySettings.UseDatabase,
-                ["in_memory.message_broker"] = inMemorySettings.UseMessageBroker
-            }))
-        .WithTracing(tracing => tracing
-            .AddAspNetCoreInstrumentation(options =>
-            {
-                options.EnrichWithHttpRequest = (activity, request) =>
+    // Configure OpenTelemetry conditionally based on settings
+    if (openTelemetrySettings.Enabled)
+    {
+        var serviceName = openTelemetrySettings.ServiceName;
+        builder.Services.AddOpenTelemetry()
+            .ConfigureResource(resource => resource
+                .AddService(serviceName)
+                .AddAttributes(new Dictionary<string, object>
                 {
-                    activity.SetTag("http.route", request.Path);
-                    activity.SetTag("user.id", request.Headers["X-User-Id"].ToString());
-                };
-                options.EnrichWithHttpResponse = (activity, response) =>
+                    ["service.version"] = "1.0.0",
+                    ["deployment.environment"] = builder.Environment.EnvironmentName,
+                    ["in_memory.database"] = inMemorySettings.UseDatabase,
+                    ["in_memory.message_broker"] = inMemorySettings.UseMessageBroker
+                }))
+            .WithTracing(tracing => tracing
+                .AddAspNetCoreInstrumentation(options =>
                 {
-                    activity.SetTag("http.response.status_code", response.StatusCode);
-                };
-            })
-            .AddHttpClientInstrumentation()
-            .AddEntityFrameworkCoreInstrumentation()
-            .AddSqlClientInstrumentation()
-            .AddSource("MassTransit")
-            .AddSource("OrdersAPI")
-            .AddOtlpExporter())
-        .WithMetrics(metrics => metrics
-            .AddAspNetCoreInstrumentation()
-            .AddHttpClientInstrumentation()
-            .AddMeter("MassTransit")
-            .AddMeter("OrdersAPI")
-            .AddPrometheusExporter());
+                    options.EnrichWithHttpRequest = (activity, request) =>
+                    {
+                        activity.SetTag("http.route", request.Path);
+                        activity.SetTag("user.id", request.Headers["X-User-Id"].ToString());
+                    };
+                    options.EnrichWithHttpResponse = (activity, response) =>
+                    {
+                        activity.SetTag("http.response.status_code", response.StatusCode);
+                    };
+                })
+                .AddHttpClientInstrumentation()
+                .AddEntityFrameworkCoreInstrumentation()
+                .AddSqlClientInstrumentation()
+                .AddSource("MassTransit")
+                .AddSource("OrdersAPI")
+                .AddOtlpExporter())
+            .WithMetrics(metrics => metrics
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddMeter("MassTransit")
+                .AddMeter("OrdersAPI")
+                .AddPrometheusExporter());
+    }
 
     // Configure Entity Framework with conditional provider
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -174,9 +167,9 @@ static async Task CreateAndRunApplication(string[] args)
     {
         builder.Services.AddSwaggerGen(c =>
         {
-            c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo 
-            { 
-                Title = "Orders API", 
+            c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+            {
+                Title = "Orders API",
                 Version = "v1",
                 Description = "RESTful API for Order management in .NET 9 Worker Service"
             });
@@ -194,25 +187,28 @@ static async Task CreateAndRunApplication(string[] args)
         });
     });
 
-    // Register background services
-    builder.Services.AddHostedService<OrderProcessingService>();
-    builder.Services.AddHostedService<MetricsCollectionService>();
-
-    // Configure conditional health checks
-    var healthChecksBuilder = builder.Services.AddHealthChecks()
-        .AddCheck<WorkerHealthCheck>("worker");
-
-    // Add health checks only for active dependencies
-    if (!inMemorySettings.UseDatabase)
+    // Register background services conditionally based on configuration
+    if (backgroundServiceSettings.OrderProcessing.Enabled)
     {
-        healthChecksBuilder.AddNpgSql(builder.Configuration.GetConnectionString("DefaultConnection")!);
+        builder.Services.AddHostedService<OrderProcessingService>();
     }
 
-    if (!inMemorySettings.UseMessageBroker)
+    if (backgroundServiceSettings.MetricsCollection.Enabled)
     {
-        // TODO: Configure RabbitMQ health check when needed for production monitoring
-        // For now, focusing on core in-memory functionality validation
-        // healthChecksBuilder.AddRabbitMQ(...);
+        builder.Services.AddHostedService<MetricsCollectionService>();
+    }
+
+    // Configure health checks conditionally based on settings
+    if (healthCheckSettings.Enabled)
+    {
+        var healthChecksBuilder = builder.Services.AddHealthChecks()
+            .AddCheck<WorkerHealthCheck>("worker");
+
+        // Add health checks only for active dependencies
+        if (!inMemorySettings.UseDatabase)
+        {
+            healthChecksBuilder.AddNpgSql(builder.Configuration.GetConnectionString("DefaultConnection")!);
+        }        
     }
 
     var app = builder.Build();
@@ -230,36 +226,45 @@ static async Task CreateAndRunApplication(string[] args)
     }
 
     // Log configuration for debugging (conditionally enabled)
-    if (builder.Environment.IsDevelopment() || 
-        builder.Configuration.GetValue<bool>("HealthChecks:Enabled", false))
+    if (builder.Environment.IsDevelopment() || healthCheckSettings.Enabled)
     {
         var logger = app.Services.GetRequiredService<ILogger<Program>>();
         logger.LogInformation("Worker Service Configuration: {Configuration}", inMemorySettings.GetConfigurationSummary());
         logger.LogInformation("Environment: {Environment}", builder.Environment.EnvironmentName);
-        
+        logger.LogInformation("OpenTelemetry Enabled: {OpenTelemetryEnabled}", openTelemetrySettings.Enabled);
+        logger.LogInformation("Health Checks Enabled: {HealthChecksEnabled}", healthCheckSettings.Enabled);
+        logger.LogInformation("Background Services - OrderProcessing: {OrderProcessing}, MetricsCollection: {MetricsCollection}",
+            backgroundServiceSettings.OrderProcessing.Enabled, backgroundServiceSettings.MetricsCollection.Enabled);
+
         if (inMemorySettings.HasInMemoryProviders)
         {
             logger.LogWarning("⚠️  In-memory providers enabled - suitable for development/testing only!");
         }
     }
 
-    // Configure health check endpoints
-    app.MapHealthChecks("/health");
-    app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+    // Configure health check endpoints conditionally
+    if (healthCheckSettings.Enabled)
     {
-        Predicate = check => check.Tags.Contains("ready")
-    });
-    app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-    {
-        Predicate = _ => false
-    });
+        app.MapHealthChecks("/health");
+        app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains("ready")
+        });
+        app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+        {
+            Predicate = _ => false
+        });
+    }
 
     // Map API endpoints
     app.MapControllers();
     app.MapOpenApi(); // .NET 9 native OpenAPI endpoint
 
-    // Configure Prometheus metrics endpoint
-    app.UseOpenTelemetryPrometheusScrapingEndpoint();
+    // Configure Prometheus metrics endpoint conditionally
+    if (openTelemetrySettings.Enabled)
+    {
+        app.UseOpenTelemetryPrometheusScrapingEndpoint();
+    }
 
     // Ensure database is created
     using (var scope = app.Services.CreateScope())

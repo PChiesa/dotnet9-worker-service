@@ -3,7 +3,7 @@ using WorkerService.Application.Commands;
 using WorkerService.Domain.Entities;
 using WorkerService.Domain.ValueObjects;
 
-namespace WorkerService.IntegrationTests.Utilities;
+namespace WorkerService.IntegrationTests.Shared.Utilities;
 
 /// <summary>
 /// Builder pattern for creating test order data with fluent API

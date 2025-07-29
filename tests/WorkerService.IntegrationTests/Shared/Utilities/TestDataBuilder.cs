@@ -4,7 +4,7 @@ using WorkerService.Domain.Entities;
 using WorkerService.Domain.ValueObjects;
 using WorkerService.Domain.Events;
 
-namespace WorkerService.IntegrationTests.Utilities;
+namespace WorkerService.IntegrationTests.Shared.Utilities;
 
 public static class TestDataBuilder
 {

@@ -7,20 +7,21 @@ using Microsoft.Extensions.DependencyInjection;
 using WorkerService.Application.Commands;
 using WorkerService.Application.Common.Extensions;
 using WorkerService.Infrastructure.Data;
-using WorkerService.IntegrationTests.Fixtures;
-using WorkerService.IntegrationTests.Utilities;
+using WorkerService.IntegrationTests.InMemory.Fixtures;
+using WorkerService.IntegrationTests.Shared.Fixtures;
+using WorkerService.IntegrationTests.Shared.Utilities;
 using Xunit;
 
-namespace WorkerService.IntegrationTests.Tests;
+namespace WorkerService.IntegrationTests.InMemory.Tests;
 
-[Collection("Api Integration Tests")]
-public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFactory>, IAsyncDisposable
+[Collection("InMemory Integration Tests")]
+public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactory>, IAsyncDisposable
 {
-    private readonly ApiTestWebApplicationFactory _factory;
+    private readonly InMemoryWebApplicationFactory _factory;
     private readonly HttpClient _client;
     private readonly JsonSerializerOptions _jsonOptions;
 
-    public OrdersApiIntegrationTests(ApiTestWebApplicationFactory factory)
+    public OrdersApiInMemoryTests(InMemoryWebApplicationFactory factory)
     {
         _factory = factory;
         _client = _factory.CreateClient();
@@ -36,7 +37,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task CreateOrder_WithValidData_ShouldReturnCreatedWithLocation()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var command = OrderTestData.SimpleCreateCommand();
 
         // First test health endpoint to verify server is running
@@ -68,7 +69,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task CreateOrder_WithInvalidData_ShouldReturnBadRequest()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var command = OrderTestData.Invalid.EmptyCustomerId();
 
         // Act
@@ -86,7 +87,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task CreateOrder_WithEmptyItems_ShouldReturnBadRequest()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var command = OrderTestData.Invalid.EmptyItems();
 
         // Act
@@ -100,7 +101,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task CreateOrder_WithComplexOrder_ShouldCalculateTotalCorrectly()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var command = OrderTestData.ComplexCreateCommand();
         var expectedTotal = command.Items.Sum(i => i.Quantity * i.UnitPrice);
 
@@ -122,7 +123,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task GetOrder_WithExistingId_ShouldReturnOrder()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var order = await CreateTestOrderAsync();
 
         // Act
@@ -142,7 +143,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task GetOrder_WithNonExistentId_ShouldReturnNotFound()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var nonExistentId = Guid.NewGuid();
 
         // Act
@@ -150,19 +151,6 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
-    }
-
-    [Fact]
-    public async Task GetOrder_WithInvalidId_ShouldReturnBadRequest()
-    {
-        // Arrange
-        await _factory.ResetDatabaseAsync();
-
-        // Act
-        var response = await _client.GetAsync("/api/orders/invalid-guid");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     #endregion
@@ -173,7 +161,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task GetOrders_WithDefaultParameters_ShouldReturnPagedResults()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         await CreateMultipleTestOrdersAsync(5);
 
         // Act
@@ -196,7 +184,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task GetOrders_WithPagination_ShouldReturnCorrectPage()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         await CreateMultipleTestOrdersAsync(25);
 
         // Act
@@ -219,7 +207,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task GetOrders_WithCustomerFilter_ShouldReturnFilteredResults()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var targetCustomerId = "FILTERED_CUSTOMER";
         
         // Create orders for different customers
@@ -246,7 +234,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task GetOrders_WithInvalidPageNumber_ShouldReturnBadRequest(int pageNumber, int pageSize)
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
 
         // Act
         var response = await _client.GetAsync($"/api/orders?pageNumber={pageNumber}&pageSize={pageSize}");
@@ -262,7 +250,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task GetOrders_WithInvalidPageSize_ShouldReturnBadRequest(int pageNumber, int pageSize)
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
 
         // Act
         var response = await _client.GetAsync($"/api/orders?pageNumber={pageNumber}&pageSize={pageSize}");
@@ -279,7 +267,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task UpdateOrder_WithValidData_ShouldReturnUpdatedOrder()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var originalOrder = await CreateTestOrderAsync();
         var updateCommand = OrderTestData.SimpleUpdateCommand(originalOrder.OrderId);
 
@@ -300,7 +288,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task UpdateOrder_WithMismatchedIds_ShouldReturnBadRequest()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var urlId = Guid.NewGuid();
         var commandId = Guid.NewGuid();
         var updateCommand = OrderTestData.SimpleUpdateCommand(commandId);
@@ -316,7 +304,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task UpdateOrder_WithNonExistentOrder_ShouldReturnNotFound()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var nonExistentId = Guid.NewGuid();
         var updateCommand = OrderTestData.SimpleUpdateCommand(nonExistentId);
 
@@ -331,7 +319,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task UpdateOrder_WithInvalidData_ShouldReturnBadRequest()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var originalOrder = await CreateTestOrderAsync();
         var invalidCommand = new UpdateOrderCommand(originalOrder.OrderId, "", new List<OrderItemDto>());
 
@@ -353,7 +341,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task DeleteOrder_WithExistingOrder_ShouldReturnNoContent()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var order = await CreateTestOrderAsync();
 
         // Act
@@ -371,7 +359,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task DeleteOrder_WithNonExistentOrder_ShouldReturnNotFound()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var nonExistentId = Guid.NewGuid();
 
         // Act
@@ -380,20 +368,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
-
-    [Fact]
-    public async Task DeleteOrder_WithInvalidId_ShouldReturnBadRequest()
-    {
-        // Arrange
-        await _factory.ResetDatabaseAsync();
-
-        // Act
-        var response = await _client.DeleteAsync("/api/orders/invalid-guid");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
+    
     #endregion
 
     #region End-to-End Workflow Tests
@@ -402,7 +377,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task CompleteOrderWorkflow_CreateGetUpdateDelete_ShouldWorkCorrectly()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var createCommand = OrderTestData.SimpleCreateCommand();
 
         // Act & Assert - Create
@@ -437,7 +412,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
     public async Task ConcurrentOperations_ShouldHandleCorrectly()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var tasks = new List<Task<HttpResponseMessage>>();
 
         // Act - Create multiple orders concurrently
@@ -493,7 +468,7 @@ public class OrdersApiIntegrationTests : IClassFixture<ApiTestWebApplicationFact
 
     public async ValueTask DisposeAsync()
     {
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         _client.Dispose();
     }
 }

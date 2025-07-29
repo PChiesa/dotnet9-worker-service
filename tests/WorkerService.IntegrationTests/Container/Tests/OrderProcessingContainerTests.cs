@@ -10,23 +10,24 @@ using WorkerService.Application.Commands;
 using WorkerService.Domain.Entities;
 using WorkerService.Infrastructure.Data;
 using WorkerService.Domain.Events;
-using WorkerService.IntegrationTests.Fixtures;
-using WorkerService.IntegrationTests.Services;
-using WorkerService.IntegrationTests.Utilities;
+using WorkerService.IntegrationTests.Container.Fixtures;
+using WorkerService.IntegrationTests.Shared.Fixtures;
+using WorkerService.IntegrationTests.Shared.Services;
+using WorkerService.IntegrationTests.Shared.Utilities;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace WorkerService.IntegrationTests.Tests;
+namespace WorkerService.IntegrationTests.Container.Tests;
 
-[Collection("Integration Tests")]
-public class OrderProcessingIntegrationTests : IClassFixture<WorkerServiceTestFixture>, IAsyncLifetime
+[Collection("Container Integration Tests")]
+public class OrderProcessingContainerTests : IClassFixture<WorkerServiceTestFixture>, IAsyncLifetime
 {
     private readonly WorkerServiceTestFixture _fixture;
     private readonly ITestOutputHelper _output;
-    private TestWebApplicationFactory? _factory;
+    private ContainerWebApplicationFactory? _factory;
     private IServiceScope? _scope;
 
-    public OrderProcessingIntegrationTests(WorkerServiceTestFixture fixture, ITestOutputHelper output)
+    public OrderProcessingContainerTests(WorkerServiceTestFixture fixture, ITestOutputHelper output)
     {
         _fixture = fixture;
         _output = output;
@@ -34,7 +35,7 @@ public class OrderProcessingIntegrationTests : IClassFixture<WorkerServiceTestFi
 
     public async Task InitializeAsync()
     {
-        _factory = new TestWebApplicationFactory(_fixture);
+        _factory = new ContainerWebApplicationFactory(_fixture);
         await _factory.InitializeAsync();
         _scope = _factory.Services.CreateScope();
     }

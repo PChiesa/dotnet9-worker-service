@@ -7,22 +7,23 @@ using WorkerService.Application.Commands;
 using WorkerService.Application.Common.Extensions;
 using WorkerService.Domain.Entities;
 using WorkerService.Infrastructure.Data;
-using WorkerService.IntegrationTests.Fixtures;
-using WorkerService.IntegrationTests.Utilities;
+using WorkerService.IntegrationTests.Container.Fixtures;
+using WorkerService.IntegrationTests.Shared.Fixtures;
+using WorkerService.IntegrationTests.Shared.Utilities;
 using Xunit;
 
-namespace WorkerService.IntegrationTests.Tests;
+namespace WorkerService.IntegrationTests.Container.Tests;
 
-[Collection("Api Integration Tests")]
-public class OrderCrudWorkflowTests : IClassFixture<ApiTestWebApplicationFactory>, IAsyncDisposable
+[Collection("Container Integration Tests")]
+public class FullWorkflowContainerTests : IClassFixture<WorkerServiceTestFixture>, IAsyncDisposable
 {
-    private readonly ApiTestWebApplicationFactory _factory;
+    private readonly ContainerWebApplicationFactory _factory;
     private readonly HttpClient _client;
     private readonly JsonSerializerOptions _jsonOptions;
 
-    public OrderCrudWorkflowTests(ApiTestWebApplicationFactory factory)
+    public FullWorkflowContainerTests(WorkerServiceTestFixture fixture)
     {
-        _factory = factory;
+        _factory = new ContainerWebApplicationFactory(fixture);
         _client = _factory.CreateClient();
         _jsonOptions = new JsonSerializerOptions
         {
@@ -36,7 +37,7 @@ public class OrderCrudWorkflowTests : IClassFixture<ApiTestWebApplicationFactory
     public async Task CustomerOrderJourney_CompleteLifecycle_ShouldWorkEndToEnd()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var customerId = "VIP_CUSTOMER_001";
         
         // Step 1: Customer creates an order
@@ -97,7 +98,7 @@ public class OrderCrudWorkflowTests : IClassFixture<ApiTestWebApplicationFactory
     public async Task BulkOrderProcessing_MultipleCustomers_ShouldHandleEfficiently()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var customerCount = 20;
         var ordersPerCustomer = 3;
         var totalExpectedOrders = customerCount * ordersPerCustomer;
@@ -155,7 +156,7 @@ public class OrderCrudWorkflowTests : IClassFixture<ApiTestWebApplicationFactory
     public async Task OrderModificationWorkflow_ValidateBusinessRules_ShouldEnforceConstraints()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var customerId = "BUSINESS_CUSTOMER";
 
         // Step 1: Create an order
@@ -205,7 +206,7 @@ public class OrderCrudWorkflowTests : IClassFixture<ApiTestWebApplicationFactory
     public async Task ErrorHandlingWorkflow_DatabaseConsistency_ShouldMaintainIntegrity()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
 
         // Test 1: Create order with invalid data
         var invalidCreateCommand = OrderTestData.Invalid.EmptyCustomerId();
@@ -236,7 +237,7 @@ public class OrderCrudWorkflowTests : IClassFixture<ApiTestWebApplicationFactory
     public async Task LargeOrderWorkflow_PerformanceAndScaling_ShouldHandleEfficiently()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var customerId = "LARGE_ORDER_CUSTOMER";
 
         // Create an order with many items
@@ -284,7 +285,7 @@ public class OrderCrudWorkflowTests : IClassFixture<ApiTestWebApplicationFactory
     public async Task DataConsistencyWorkflow_ConcurrentAccess_ShouldMaintainIntegrity()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var customerId = "CONCURRENT_ACCESS_CUSTOMER";
         
         // Create an initial order
@@ -332,7 +333,7 @@ public class OrderCrudWorkflowTests : IClassFixture<ApiTestWebApplicationFactory
     public async Task HighVolumeOperations_StressTest_ShouldMaintainPerformance()
     {
         // Arrange
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         var operationCount = 50;
         var maxDurationPerOperation = TimeSpan.FromSeconds(2);
 
@@ -397,7 +398,7 @@ public class OrderCrudWorkflowTests : IClassFixture<ApiTestWebApplicationFactory
 
     public async ValueTask DisposeAsync()
     {
-        await _factory.ResetDatabaseAsync();
+        await _factory.ClearDatabaseAsync();
         _client.Dispose();
     }
 }
