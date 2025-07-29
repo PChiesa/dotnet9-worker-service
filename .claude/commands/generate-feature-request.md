@@ -30,7 +30,7 @@ Use the feature-requirements-analyst agent to generate a comprehensive Feature R
 
 ## Output
 
--   **Filename Generation**: Create a kebab-case filename from the feature name (e.g., `new-feature-name.md`).
+-   **Filename Generation**: Create a concise, maximum 3 words, in a kebab-case filename from the feature name (e.g., `new-feature-name.md`).
 -   **Save Location**: Save the generated file as `FRs/{generated-filename}.md`.
 
 ## Quality Checklist
