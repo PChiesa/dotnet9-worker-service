@@ -31,6 +31,64 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         };
     }
 
+    #region Authentication Tests
+
+    [Fact]
+    public async Task OrdersEndpoints_WithoutToken_ShouldReturnUnauthorized()
+    {
+        // Arrange
+        await _factory.ClearDatabaseAsync();
+        var command = OrderTestData.SimpleCreateCommand();
+
+        // Act & Assert - All endpoints should return 401 without authentication
+        var createResponse = await _client.PostAsJsonAsync("/api/orders", command, _jsonOptions);
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var getResponse = await _client.GetAsync("/api/orders");
+        getResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var getByIdResponse = await _client.GetAsync($"/api/orders/{Guid.NewGuid()}");
+        getByIdResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var updateResponse = await _client.PutAsJsonAsync($"/api/orders/{Guid.NewGuid()}", command, _jsonOptions);
+        updateResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var deleteResponse = await _client.DeleteAsync($"/api/orders/{Guid.NewGuid()}");
+        deleteResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task OrdersEndpoints_WithInvalidToken_ShouldReturnUnauthorized()
+    {
+        // Arrange
+        await _factory.ClearDatabaseAsync();
+        var command = OrderTestData.SimpleCreateCommand();
+        
+        // Add invalid token
+        _client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "invalid-token");
+
+        // Act & Assert
+        var createResponse = await _client.PostAsJsonAsync("/api/orders", command, _jsonOptions);
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var getResponse = await _client.GetAsync("/api/orders");
+        getResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task OrdersEndpoints_WithValidToken_ShouldReturnSuccess()
+    {
+        // Arrange
+        await _factory.ClearDatabaseAsync();
+        var authenticatedClient = AuthenticationTestHelper.CreateAuthenticatedClient(_client, _factory.Services);
+
+        // Act & Assert - Test basic endpoint access with valid token
+        var getResponse = await authenticatedClient.GetAsync("/api/orders");
+        getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    #endregion
+
     #region POST /api/orders Tests
 
     [Fact]
@@ -39,9 +97,10 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         // Arrange
         await _factory.ClearDatabaseAsync();
         var command = OrderTestData.SimpleCreateCommand();
+        var authenticatedClient = GetAuthenticatedClient();
 
         // First test health endpoint to verify server is running
-        var healthResponse = await _client.GetAsync("/health");
+        var healthResponse = await authenticatedClient.GetAsync("/health");
         
         if (healthResponse.StatusCode != HttpStatusCode.OK)
         {
@@ -52,7 +111,7 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         healthResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Act - test actual endpoint
-        var response = await _client.PostAsJsonAsync("/api/orders", command, _jsonOptions);
+        var response = await authenticatedClient.PostAsJsonAsync("/api/orders", command, _jsonOptions);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -71,9 +130,10 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         // Arrange
         await _factory.ClearDatabaseAsync();
         var command = OrderTestData.Invalid.EmptyCustomerId();
+        var authenticatedClient = GetAuthenticatedClient();
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/orders", command, _jsonOptions);
+        var response = await authenticatedClient.PostAsJsonAsync("/api/orders", command, _jsonOptions);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -89,9 +149,10 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         // Arrange
         await _factory.ClearDatabaseAsync();
         var command = OrderTestData.Invalid.EmptyItems();
+        var authenticatedClient = GetAuthenticatedClient();
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/orders", command, _jsonOptions);
+        var response = await authenticatedClient.PostAsJsonAsync("/api/orders", command, _jsonOptions);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -106,7 +167,8 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         var expectedTotal = command.Items.Sum(i => i.Quantity * i.UnitPrice);
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/orders", command, _jsonOptions);
+        var authenticatedClient = GetAuthenticatedClient();
+        var response = await authenticatedClient.PostAsJsonAsync("/api/orders", command, _jsonOptions);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -125,9 +187,10 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         // Arrange
         await _factory.ClearDatabaseAsync();
         var order = await CreateTestOrderAsync();
+        var authenticatedClient = GetAuthenticatedClient();
 
         // Act
-        var response = await _client.GetAsync($"/api/orders/{order.OrderId}");
+        var response = await authenticatedClient.GetAsync($"/api/orders/{order.OrderId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -147,7 +210,8 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         var nonExistentId = Guid.NewGuid();
 
         // Act
-        var response = await _client.GetAsync($"/api/orders/{nonExistentId}");
+        var authenticatedClient = GetAuthenticatedClient();
+        var response = await authenticatedClient.GetAsync($"/api/orders/{nonExistentId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -163,9 +227,10 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         // Arrange
         await _factory.ClearDatabaseAsync();
         await CreateMultipleTestOrdersAsync(5);
+        var authenticatedClient = GetAuthenticatedClient();
 
         // Act
-        var response = await _client.GetAsync("/api/orders");
+        var response = await authenticatedClient.GetAsync("/api/orders");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -188,7 +253,8 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         await CreateMultipleTestOrdersAsync(25);
 
         // Act
-        var response = await _client.GetAsync("/api/orders?pageNumber=2&pageSize=10");
+        var authenticatedClient = GetAuthenticatedClient();
+        var response = await authenticatedClient.GetAsync("/api/orders?pageNumber=2&pageSize=10");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -217,7 +283,8 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         await CreateTestOrderAsync(targetCustomerId);
 
         // Act
-        var response = await _client.GetAsync($"/api/orders?customerId={targetCustomerId}");
+        var authenticatedClient = GetAuthenticatedClient();
+        var response = await authenticatedClient.GetAsync($"/api/orders?customerId={targetCustomerId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -235,9 +302,10 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
     {
         // Arrange
         await _factory.ClearDatabaseAsync();
+        var authenticatedClient = GetAuthenticatedClient();
 
         // Act
-        var response = await _client.GetAsync($"/api/orders?pageNumber={pageNumber}&pageSize={pageSize}");
+        var response = await authenticatedClient.GetAsync($"/api/orders?pageNumber={pageNumber}&pageSize={pageSize}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -251,9 +319,10 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
     {
         // Arrange
         await _factory.ClearDatabaseAsync();
+        var authenticatedClient = GetAuthenticatedClient();
 
         // Act
-        var response = await _client.GetAsync($"/api/orders?pageNumber={pageNumber}&pageSize={pageSize}");
+        var response = await authenticatedClient.GetAsync($"/api/orders?pageNumber={pageNumber}&pageSize={pageSize}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -272,7 +341,8 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         var updateCommand = OrderTestData.SimpleUpdateCommand(originalOrder.OrderId);
 
         // Act
-        var response = await _client.PutAsJsonAsync($"/api/orders/{originalOrder.OrderId}", updateCommand, _jsonOptions);
+        var authenticatedClient = GetAuthenticatedClient();
+        var response = await authenticatedClient.PutAsJsonAsync($"/api/orders/{originalOrder.OrderId}", updateCommand, _jsonOptions);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -294,7 +364,8 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         var updateCommand = OrderTestData.SimpleUpdateCommand(commandId);
 
         // Act
-        var response = await _client.PutAsJsonAsync($"/api/orders/{urlId}", updateCommand, _jsonOptions);
+        var authenticatedClient = GetAuthenticatedClient();
+        var response = await authenticatedClient.PutAsJsonAsync($"/api/orders/{urlId}", updateCommand, _jsonOptions);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -309,7 +380,8 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         var updateCommand = OrderTestData.SimpleUpdateCommand(nonExistentId);
 
         // Act
-        var response = await _client.PutAsJsonAsync($"/api/orders/{nonExistentId}", updateCommand, _jsonOptions);
+        var authenticatedClient = GetAuthenticatedClient();
+        var response = await authenticatedClient.PutAsJsonAsync($"/api/orders/{nonExistentId}", updateCommand, _jsonOptions);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -324,7 +396,8 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         var invalidCommand = new UpdateOrderCommand(originalOrder.OrderId, "", new List<OrderItemDto>());
 
         // Act
-        var response = await _client.PutAsJsonAsync($"/api/orders/{originalOrder.OrderId}", invalidCommand, _jsonOptions);
+        var authenticatedClient = GetAuthenticatedClient();
+        var response = await authenticatedClient.PutAsJsonAsync($"/api/orders/{originalOrder.OrderId}", invalidCommand, _jsonOptions);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -345,13 +418,14 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         var order = await CreateTestOrderAsync();
 
         // Act
-        var response = await _client.DeleteAsync($"/api/orders/{order.OrderId}");
+        var authenticatedClient = GetAuthenticatedClient();
+        var response = await authenticatedClient.DeleteAsync($"/api/orders/{order.OrderId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         
         // Verify order is deleted by trying to get it
-        var getResponse = await _client.GetAsync($"/api/orders/{order.OrderId}");
+        var getResponse = await authenticatedClient.GetAsync($"/api/orders/{order.OrderId}");
         getResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -363,7 +437,8 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         var nonExistentId = Guid.NewGuid();
 
         // Act
-        var response = await _client.DeleteAsync($"/api/orders/{nonExistentId}");
+        var authenticatedClient = GetAuthenticatedClient();
+        var response = await authenticatedClient.DeleteAsync($"/api/orders/{nonExistentId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -381,30 +456,31 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         var createCommand = OrderTestData.SimpleCreateCommand();
 
         // Act & Assert - Create
-        var createResponse = await _client.PostAsJsonAsync("/api/orders", createCommand, _jsonOptions);
+        var authenticatedClient = GetAuthenticatedClient();
+        var createResponse = await authenticatedClient.PostAsJsonAsync("/api/orders", createCommand, _jsonOptions);
         createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
         var createResult = await createResponse.Content.ReadFromJsonAsync<CreateOrderResult>(_jsonOptions);
         var orderId = createResult!.OrderId;
 
         // Act & Assert - Get
-        var getResponse = await _client.GetAsync($"/api/orders/{orderId}");
+        var getResponse = await authenticatedClient.GetAsync($"/api/orders/{orderId}");
         getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var getResult = await getResponse.Content.ReadFromJsonAsync<OrderResponseDto>(_jsonOptions);
         getResult!.Id.Should().Be(orderId);
 
         // Act & Assert - Update
         var updateCommand = OrderTestData.SimpleUpdateCommand(orderId);
-        var updateResponse = await _client.PutAsJsonAsync($"/api/orders/{orderId}", updateCommand, _jsonOptions);
+        var updateResponse = await authenticatedClient.PutAsJsonAsync($"/api/orders/{orderId}", updateCommand, _jsonOptions);
         updateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var updateResult = await updateResponse.Content.ReadFromJsonAsync<UpdateOrderResult>(_jsonOptions);
         updateResult!.CustomerId.Should().Be(updateCommand.CustomerId);
 
         // Act & Assert - Delete
-        var deleteResponse = await _client.DeleteAsync($"/api/orders/{orderId}");
+        var deleteResponse = await authenticatedClient.DeleteAsync($"/api/orders/{orderId}");
         deleteResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // Verify deletion
-        var finalGetResponse = await _client.GetAsync($"/api/orders/{orderId}");
+        var finalGetResponse = await authenticatedClient.GetAsync($"/api/orders/{orderId}");
         finalGetResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -416,6 +492,7 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         var tasks = new List<Task<HttpResponseMessage>>();
 
         // Act - Create multiple orders concurrently
+        var authenticatedClient = GetAuthenticatedClient();
         for (int i = 0; i < 10; i++)
         {
             var command = OrderTestDataBuilder.Create()
@@ -423,7 +500,7 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
                 .WithRandomItems()
                 .BuildCreateCommand();
             
-            tasks.Add(_client.PostAsJsonAsync("/api/orders", command, _jsonOptions));
+            tasks.Add(authenticatedClient.PostAsJsonAsync("/api/orders", command, _jsonOptions));
         }
 
         var responses = await Task.WhenAll(tasks);
@@ -432,7 +509,7 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
         responses.Should().AllSatisfy(r => r.StatusCode.Should().Be(HttpStatusCode.Created));
         
         // Verify all orders were created
-        var listResponse = await _client.GetAsync("/api/orders?pageSize=20");
+        var listResponse = await authenticatedClient.GetAsync("/api/orders?pageSize=20");
         var listResult = await listResponse.Content.ReadFromJsonAsync<PagedOrdersResult>(_jsonOptions);
         listResult!.TotalCount.Should().Be(10);
     }
@@ -441,13 +518,19 @@ public class OrdersApiInMemoryTests : IClassFixture<InMemoryWebApplicationFactor
 
     #region Helper Methods
 
+    private HttpClient GetAuthenticatedClient()
+    {
+        return AuthenticationTestHelper.CreateAuthenticatedClient(_client, _factory.Services);
+    }
+
     private async Task<CreateOrderResult> CreateTestOrderAsync(string? customerId = null)
     {
         var command = customerId != null 
             ? OrderTestDataBuilder.Create().WithCustomerId(customerId).WithRandomItems().BuildCreateCommand()
             : OrderTestData.SimpleCreateCommand();
         
-        var response = await _client.PostAsJsonAsync("/api/orders", command, _jsonOptions);
+        var authenticatedClient = GetAuthenticatedClient();
+        var response = await authenticatedClient.PostAsJsonAsync("/api/orders", command, _jsonOptions);
         response.EnsureSuccessStatusCode();
         
         return await response.Content.ReadFromJsonAsync<CreateOrderResult>(_jsonOptions) 
