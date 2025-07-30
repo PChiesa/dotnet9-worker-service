@@ -1,7 +1,10 @@
+using System.Text;
 using FluentValidation;
 using MassTransit;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -42,6 +45,8 @@ static async Task CreateAndRunApplication(string[] args)
         builder.Configuration.GetSection(OpenTelemetrySettings.SectionName));
     builder.Services.Configure<HealthCheckSettings>(
         builder.Configuration.GetSection(HealthCheckSettings.SectionName));
+    builder.Services.Configure<JwtSettings>(
+        builder.Configuration.GetSection(JwtSettings.SectionName));
 
     // Get configuration settings for conditional registration
     var inMemorySettings = builder.Configuration
@@ -56,6 +61,9 @@ static async Task CreateAndRunApplication(string[] args)
     var healthCheckSettings = builder.Configuration
         .GetSection(HealthCheckSettings.SectionName)
         .Get<HealthCheckSettings>() ?? new HealthCheckSettings();
+    var jwtSettings = builder.Configuration
+        .GetSection(JwtSettings.SectionName)
+        .Get<JwtSettings>() ?? new JwtSettings();
 
     // Configure OpenTelemetry conditionally based on settings
     if (openTelemetrySettings.Enabled)
@@ -159,6 +167,28 @@ static async Task CreateAndRunApplication(string[] args)
     // Register FluentValidation
     builder.Services.AddValidatorsFromAssemblyContaining<CreateOrderCommandHandler>();
 
+    // Register JWT Token Service
+    builder.Services.AddScoped<JwtTokenService>();
+
+    // Configure JWT Authentication
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
+                ValidateIssuer = true,
+                ValidIssuer = jwtSettings.Issuer,
+                ValidateAudience = true,
+                ValidAudience = jwtSettings.Audience,
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero
+            };
+        });
+
+    builder.Services.AddAuthorization();
+
     // Configure Web API
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
@@ -176,6 +206,31 @@ static async Task CreateAndRunApplication(string[] args)
                 Title = "Orders API",
                 Version = "v1",
                 Description = "RESTful API for Order management in .NET 9 Worker Service"
+            });
+
+            // Add JWT authentication to Swagger
+            c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+                Name = "Authorization",
+                In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+                Scheme = "Bearer"
+            });
+
+            c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+            {
+                {
+                    new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                    {
+                        Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                        {
+                            Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        }
+                    },
+                    Array.Empty<string>()
+                }
             });
         });
     }
@@ -229,6 +284,10 @@ static async Task CreateAndRunApplication(string[] args)
         app.UseCors();
     }
 
+    // Add authentication and authorization middleware
+    app.UseAuthentication();
+    app.UseAuthorization();
+
     // Log configuration for debugging (conditionally enabled)
     if (builder.Environment.IsDevelopment() || healthCheckSettings.Enabled)
     {
@@ -268,6 +327,12 @@ static async Task CreateAndRunApplication(string[] args)
         .WithTags("Items")
         .WithOpenApi()
         .MapItemEndpoints();
+
+    // Map Authentication endpoints
+    app.MapGroup("/auth")
+        .WithTags("Authentication")
+        .WithOpenApi()
+        .MapAuthEndpoints();
         
     app.MapOpenApi(); // .NET 9 native OpenAPI endpoint
 
