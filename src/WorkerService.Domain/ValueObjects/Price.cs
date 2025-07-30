@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace WorkerService.Domain.ValueObjects;
 
 public class Price : IEquatable<Price>
@@ -22,5 +24,5 @@ public class Price : IEquatable<Price>
     
     public override bool Equals(object? obj) => Equals(obj as Price);
     public override int GetHashCode() => HashCode.Combine(Amount, Currency);
-    public override string ToString() => $"{Amount:F2} {Currency}";
+    public override string ToString() => $"{Amount.ToString("F2", CultureInfo.InvariantCulture)} {Currency}";
 }
