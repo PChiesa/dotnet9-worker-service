@@ -12,14 +12,14 @@ This workflow orchestrates a team of AI agents to take a feature from an idea to
 
 ## Workflow Steps
 
-1.  **THINKHARD Start: Feature Idea**
+1.  **Start: Feature Idea**
     -   **Input:** A high-level description of a feature from the user. $ARGUMENTS
     -   **Agent:** `feature-requirements-analyst`
     -   **Action:** The agent interacts with the user to flesh out the details.
     -   **Output:** A detailed Feature Requirements Document (FRD).
     -   **Wait:** MUST Wait for FRD approval by user before continuing workflow.
 
-2.  **THINKHARD  Step 2: Technical Planning**
+2.  **Step 2: Technical Planning**
     -   **Input:** The FRD from the previous step.
     -   **Agent:** `implementation-planner`
     -   **Action:** The agent analyzes the codebase and the FRD to create a detailed technical plan.

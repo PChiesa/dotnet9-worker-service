@@ -8,7 +8,6 @@ This file contains the domain-specific rules for .NET 9 Worker Service developme
 
 ### PRP Framework Workflow
 - **Always read features under FRs/** - Check existing feature requests before generating a new PRP
-- **Use the PRP pattern**: new-feature-request.md → `/generate-worker-prp new-feature-request.md` → `/execute-worker-prp PRPs/filename.md`
 - **Follow validation loops** - Each PRP must include executable validation steps
 - **Context is King** - Include ALL necessary documentation, examples, and patterns
 
@@ -279,6 +278,9 @@ services:
 
 ## 🚫 Common Gotchas and Anti-Patterns
 
+### Operation System Commands
+- ❌ Don't use Linux or MacOS terminal commands, ONLY use Windows Powershell or CMD commands.
+
 ### DbContext Pitfalls
 - ❌ Don't share DbContext across threads
 - ❌ Don't inject DbContext into singleton services
@@ -302,6 +304,45 @@ services:
 - ❌ Don't forget service metadata
 - ❌ Don't ignore performance impact of instrumentation
 - ❌ Don't skip environment variable configuration
+
+
+## Useful Commands
+```bash
+# Restore dependencies
+dotnet restore
+
+# Clean solution
+dotnet clean
+
+# Build solution
+dotnet build
+
+# Run project with in-memory database and message broker
+dotnet run --project src/WorkerService.Worker/ --environment Development
+
+# Run tests
+dotnet test
+
+# Run a specific test by fully qualified name
+dotnet test --filter "FullyQualifiedName~MyNamespace.MyTestsClass.MyTestMethod"
+
+# Run tests with a specific category
+dotnet test --filter "Category=UnitTests"
+
+# Exclude tests from a specific namespace
+dotnet test --filter "FullyQualifiedName!~IntegrationTests"
+
+# Combine multiple conditions
+dotnet test --filter "(FullyQualifiedName~TestClass1) | (Category=CategoryA)"
+# OR
+dotnet test --filter "Category=UnitTests & FullyQualifiedName~MyFeature"
+```
+
+## Helpful GIT commands
+-  Provides a summary of modified, staged, and untracked files: `git status`   
+-  Shows detailed line-by-line differences for unstaged changes in the working directory compared to the last commit: `git diff`
+-  Shows detailed line-by-line differences for changes that have been added to the staging area but not yet committed: `git diff --staged`
+-  Shows detailed line-by-line differences between your working directory and the last commit (HEAD): `git diff HEAD`
 
 ## 📝 Code Quality Standards
 
