@@ -6,10 +6,10 @@ public class OrderItem
 {
     public Guid Id { get; private set; }
     public Guid OrderId { get; private set; }
-    public string ProductId { get; private set; } // Keep for backward compatibility
+    public string ProductId { get; private set; } = string.Empty; // Keep for backward compatibility
     public Guid? ItemId { get; private set; } // New reference to Item
     public int Quantity { get; private set; }
-    public Money UnitPrice { get; private set; }
+    public Money UnitPrice { get; private set; } = new Money(0);
     public Money TotalPrice => new Money(UnitPrice.Amount * Quantity);
 
     // Navigation property

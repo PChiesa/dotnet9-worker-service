@@ -14,28 +14,19 @@ using Xunit.Abstractions;
 namespace WorkerService.IntegrationTests.InMemory.Tests;
 
 [Collection("InMemory Integration Tests")]
-public class SimpleInMemoryTests : IClassFixture<InMemoryWebApplicationFactory>, IAsyncLifetime
+public class SimpleInMemoryTests : IClassFixture<InMemoryWebApplicationFactory>
 {
     private readonly InMemoryWebApplicationFactory _factory;
     private readonly ITestOutputHelper _output;
-    private IServiceScope? _scope;
+    private readonly IServiceScope _scope;
 
     public SimpleInMemoryTests(InMemoryWebApplicationFactory factory, ITestOutputHelper output)
     {
         _factory = factory;
         _output = output;
-    }
-
-    public async Task InitializeAsync()
-    {
-        //await _factory.InitializeAsync();
         _scope = _factory.Services.CreateScope();
     }
-
-    public async Task DisposeAsync()
-    {
-        _scope?.Dispose();
-    }
+    
 
     [Fact]
     public async Task Should_Create_Order_Successfully()

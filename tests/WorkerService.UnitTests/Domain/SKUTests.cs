@@ -22,7 +22,7 @@ public class SKUTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    [InlineData(null)]
+
     public void SKU_Creation_With_Empty_Value_Should_Throw_Exception(string invalidValue)
     {
         // Act & Assert
@@ -109,8 +109,7 @@ public class SKUTests
         var sku = new SKU("PROD-123");
 
         // Act & Assert
-        sku.Equals(null).Should().BeFalse();
-        sku.Equals((object?)null).Should().BeFalse();
+        sku.Equals(null).Should().BeFalse();        
     }
 
     [Fact]

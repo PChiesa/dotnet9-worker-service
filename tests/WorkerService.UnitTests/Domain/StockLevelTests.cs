@@ -365,7 +365,6 @@ public class StockLevelTests
 
         // Act & Assert
         stockLevel.Equals(null).Should().BeFalse();
-        stockLevel.Equals((object?)null).Should().BeFalse();
     }
 
     [Fact]

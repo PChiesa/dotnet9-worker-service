@@ -6,10 +6,10 @@ namespace WorkerService.Domain.Entities;
 public class Order
 {
     public Guid Id { get; private set; }
-    public string CustomerId { get; private set; }
+    public string CustomerId { get; private set; } = string.Empty;
     public DateTime OrderDate { get; private set; }
     public OrderStatus Status { get; private set; }
-    public Money TotalAmount { get; private set; }
+    public Money TotalAmount { get; private set; } = new Money(0);
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
     

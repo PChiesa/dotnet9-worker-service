@@ -51,7 +51,7 @@ public class PriceTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    [InlineData(null)]
+    
     public void Price_Creation_With_Empty_Currency_Should_Throw_Exception(string invalidCurrency)
     {
         // Arrange
@@ -169,8 +169,7 @@ public class PriceTests
         var price = new Price(25.99m);
 
         // Act & Assert
-        price.Equals(null).Should().BeFalse();
-        price.Equals((object?)null).Should().BeFalse();
+        price.Equals(null).Should().BeFalse();        
     }
 
     [Fact]

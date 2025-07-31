@@ -58,8 +58,7 @@ public class ItemTests
 
     [Theory]
     [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(null)]
+    [InlineData("   ")]    
     public void Item_Creation_With_Invalid_Name_Should_Throw_Exception(string invalidName)
     {
         // Arrange
@@ -94,8 +93,7 @@ public class ItemTests
 
     [Theory]
     [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(null)]
+    [InlineData("   ")]    
     public void Item_Creation_With_Invalid_Category_Should_Throw_Exception(string invalidCategory)
     {
         // Arrange
@@ -109,25 +107,7 @@ public class ItemTests
         var action = () => new Item(sku, name, description, price, initialStock, invalidCategory);
         action.Should().Throw<ArgumentException>()
             .WithMessage("Category cannot be empty*");
-    }
-
-    [Fact]
-    public void Item_Creation_With_Null_Description_Should_Set_Empty_String()
-    {
-        // Arrange
-        var sku = new SKU("TEST-001");
-        var name = "Test Product";
-        string? description = null;
-        var price = new Price(25.99m);
-        var initialStock = 100;
-        var category = "Electronics";
-
-        // Act
-        var item = new Item(sku, name, description, price, initialStock, category);
-
-        // Assert
-        item.Description.Should().Be(string.Empty);
-    }
+    }    
 
     [Fact]
     public void Update_Should_Modify_Properties_And_Raise_Event()

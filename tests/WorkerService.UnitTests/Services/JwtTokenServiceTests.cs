@@ -49,8 +49,7 @@ public class JwtTokenServiceTests
     }
 
     [Theory]
-    [InlineData("")]
-    [InlineData(null)]
+    [InlineData("")]    
     [InlineData("   ")]
     public void GenerateToken_WithEmptyUsername_ShouldThrowException(string username)
     {

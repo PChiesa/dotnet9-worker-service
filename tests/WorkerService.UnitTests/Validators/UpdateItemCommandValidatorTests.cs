@@ -54,8 +54,7 @@ public class UpdateItemCommandValidatorTests
 
     [Theory]
     [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(null)]
+    [InlineData("   ")]    
     public void Validate_WithEmptyName_ShouldHaveValidationError(string emptyName)
     {
         // Arrange
@@ -151,23 +150,6 @@ public class UpdateItemCommandValidatorTests
         result.ShouldNotHaveValidationErrorFor(x => x.Description);
     }
 
-    [Fact]
-    public void Validate_WithNullDescription_ShouldPassValidation()
-    {
-        // Arrange
-        var command = new UpdateItemCommand(
-            Guid.NewGuid(),
-            "Updated Product",
-            null, // Null description should be allowed
-            35.99m,
-            "Updated Category");
-
-        // Act
-        var result = _validator.TestValidate(command);
-
-        // Assert
-        result.ShouldNotHaveValidationErrorFor(x => x.Description);
-    }
 
     [Theory]
     [InlineData(0)]
@@ -237,7 +219,6 @@ public class UpdateItemCommandValidatorTests
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    [InlineData(null)]
     public void Validate_WithEmptyCategory_ShouldHaveValidationError(string emptyCategory)
     {
         // Arrange

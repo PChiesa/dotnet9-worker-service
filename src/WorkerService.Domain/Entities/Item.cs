@@ -6,16 +6,16 @@ namespace WorkerService.Domain.Entities;
 public class Item
 {
     public Guid Id { get; private set; }
-    public SKU SKU { get; private set; }
-    public string Name { get; private set; }
-    public string Description { get; private set; }
-    public Price Price { get; private set; }
-    public StockLevel StockLevel { get; private set; }
-    public string Category { get; private set; }
+    public SKU SKU { get; private set; } = new SKU("DEFAULT");
+    public string Name { get; private set; } = string.Empty;
+    public string Description { get; private set; } = string.Empty;
+    public Price Price { get; private set; } = new Price(0, "USD");
+    public StockLevel StockLevel { get; private set; } = new StockLevel(0);
+    public string Category { get; private set; } = string.Empty;
     public bool IsActive { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
-    public byte[] Version { get; private set; } // For optimistic concurrency
+    public byte[] Version { get; private set; } = Array.Empty<byte>(); // For optimistic concurrency
     
     private readonly List<IDomainEvent> _domainEvents = new();
     public IReadOnlyList<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();

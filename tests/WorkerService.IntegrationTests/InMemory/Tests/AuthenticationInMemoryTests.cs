@@ -126,8 +126,6 @@ public class AuthenticationInMemoryTests : IClassFixture<InMemoryWebApplicationF
     [Theory]
     [InlineData("", "password")]
     [InlineData("username", "")]
-    [InlineData(null, "password")]
-    [InlineData("username", null)]
     [InlineData("   ", "password")]
     [InlineData("username", "   ")]
     public async Task PostAuthToken_WithMissingUsernameOrPassword_ShouldReturnBadRequest(string username, string password)

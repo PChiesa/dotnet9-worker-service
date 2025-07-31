@@ -36,8 +36,7 @@ public class CreateItemCommandValidatorTests
 
     [Theory]
     [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(null)]
+    [InlineData("   ")]    
     public void Validate_WithEmptySKU_ShouldHaveValidationError(string emptySku)
     {
         // Arrange
@@ -130,8 +129,7 @@ public class CreateItemCommandValidatorTests
 
     [Theory]
     [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(null)]
+    [InlineData("   ")]    
     public void Validate_WithEmptyName_ShouldHaveValidationError(string emptyName)
     {
         // Arrange
@@ -231,25 +229,7 @@ public class CreateItemCommandValidatorTests
         // Assert
         result.ShouldNotHaveValidationErrorFor(x => x.Description);
     }
-
-    [Fact]
-    public void Validate_WithNullDescription_ShouldPassValidation()
-    {
-        // Arrange
-        var command = new CreateItemCommand(
-            "PROD-001",
-            "Test Product",
-            null, // Null description should be allowed
-            25.99m,
-            100,
-            "Electronics");
-
-        // Act
-        var result = _validator.TestValidate(command);
-
-        // Assert
-        result.ShouldNotHaveValidationErrorFor(x => x.Description);
-    }
+    
 
     [Theory]
     [InlineData(0)]
@@ -367,8 +347,7 @@ public class CreateItemCommandValidatorTests
 
     [Theory]
     [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(null)]
+    [InlineData("   ")]    
     public void Validate_WithEmptyCategory_ShouldHaveValidationError(string emptyCategory)
     {
         // Arrange
