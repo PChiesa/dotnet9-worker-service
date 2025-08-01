@@ -179,4 +179,15 @@ public class Order
         var total = Items.Sum(item => item.UnitPrice.Amount * item.Quantity);
         return new Money(total);
     }
+
+    public void MarkAsCreated()
+    {
+        if (Status != OrderStatus.Pending)
+            throw new InvalidOperationException("Only pending orders can be created");
+
+        Status = OrderStatus.Pending;
+        UpdatedAt = DateTime.UtcNow;
+
+        _domainEvents.Add(new OrderCreatedEvent(Id, CustomerId, TotalAmount.Amount));
+    }
 }

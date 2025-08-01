@@ -315,6 +315,7 @@ services:
 - ❌ Don't forget idempotency in consumers
 - ❌ Don't ignore message acknowledgment patterns
 - ❌ Don't skip correlation ID configuration
+- ❌ Don't publish messages using base types
 
 ### Worker Service Pitfalls
 - ❌ Don't ignore cancellation tokens

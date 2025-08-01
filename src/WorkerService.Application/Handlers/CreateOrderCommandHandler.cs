@@ -5,6 +5,7 @@ using WorkerService.Application.Commands;
 using WorkerService.Application.Common.Extensions;
 using WorkerService.Domain.Interfaces;
 using WorkerService.Application.Common.Metrics;
+using WorkerService.Domain.Events;
 
 namespace WorkerService.Application.Handlers;
 
@@ -37,7 +38,8 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Cre
 
             // Create order entity using manual mapping
             var order = request.ToEntity();
-            
+            order.MarkAsCreated();
+
             // Save to database
             await _orderRepository.AddAsync(order, cancellationToken);
             await _orderRepository.SaveChangesAsync(cancellationToken);
@@ -45,13 +47,9 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Cre
             _logger.LogInformation("Order {OrderId} created for customer {CustomerId}", 
                 order.Id, order.CustomerId);
 
-            // Publish domain events
-            foreach (var domainEvent in order.DomainEvents)
-            {
-                await _publishEndpoint.Publish(domainEvent, cancellationToken);
-                _logger.LogDebug("Published domain event {EventType} for order {OrderId}", 
-                    domainEvent.GetType().Name, order.Id);
-            }
+            await _publishEndpoint.Publish(new OrderCreatedEvent(order.Id, order.CustomerId, order.TotalAmount.Amount), cancellationToken);
+            _logger.LogDebug("Published domain event {EventType} for order {OrderId}", 
+                typeof(OrderCreatedEvent).Name, order.Id);
             
             order.ClearDomainEvents();
 

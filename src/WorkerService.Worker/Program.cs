@@ -10,6 +10,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
 using WorkerService.Application.Handlers;
+using WorkerService.Domain.Events;
 using WorkerService.Domain.Interfaces;
 using WorkerService.Infrastructure.Consumers;
 using WorkerService.Infrastructure.Data;
@@ -124,7 +125,7 @@ static async Task CreateAndRunApplication(string[] args)
         }
     });
 
-    // Configure MassTransit with conditional transport
+
     builder.Services.AddMassTransit(x =>
     {
         // Register consumers
@@ -148,42 +149,12 @@ static async Task CreateAndRunApplication(string[] args)
             x.UsingRabbitMq((context, cfg) =>
             {
                 cfg.Host(builder.Configuration.GetConnectionString("RabbitMQ"));
-
-                // Configure receive endpoints with production settings
-                cfg.ReceiveEndpoint("order-created", e =>
-                {
-                    e.SetQuorumQueue(3); // Reliability for production
-                    e.ConfigureConsumer<OrderCreatedConsumer>(context);
-                });
-
-                cfg.ReceiveEndpoint("order-paid", e =>
-                {
-                    e.SetQuorumQueue(3); // Reliability for production
-                    e.ConfigureConsumer<OrderPaidConsumer>(context);
-                });
-
-                cfg.ReceiveEndpoint("order-shipped", e =>
-                {
-                    e.SetQuorumQueue(3); // Reliability for production
-                    e.ConfigureConsumer<OrderShippedConsumer>(context);
-                });
-
-                cfg.ReceiveEndpoint("order-delivered", e =>
-                {
-                    e.SetQuorumQueue(3); // Reliability for production
-                    e.ConfigureConsumer<OrderDeliveredConsumer>(context);
-                });
-
-                cfg.ReceiveEndpoint("order-cancelled", e =>
-                {
-                    e.SetQuorumQueue(3); // Reliability for production
-                    e.ConfigureConsumer<OrderCancelledConsumer>(context);
-                });
-
+                cfg.SetQuorumQueue(3); // Reliability for production                    
                 cfg.ConfigureEndpoints(context);
             });
         }
     });
+
 
     // Register repositories
     builder.Services.AddScoped<IOrderRepository, OrderRepository>();
@@ -197,6 +168,9 @@ static async Task CreateAndRunApplication(string[] args)
 
     // Register JWT Token Service
     builder.Services.AddScoped<JwtTokenService>();
+
+    // Register Database Migration Service
+    builder.Services.AddScoped<DatabaseMigrationService>();
 
     // Configure JWT Authentication
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -295,7 +269,7 @@ static async Task CreateAndRunApplication(string[] args)
         if (!inMemorySettings.UseDatabase)
         {
             healthChecksBuilder.AddNpgSql(builder.Configuration.GetConnectionString("DefaultConnection")!);
-        }        
+        }
     }
 
     var app = builder.Build();
@@ -349,7 +323,7 @@ static async Task CreateAndRunApplication(string[] args)
 
     // Map API endpoints
     app.MapControllers();
-    
+
     // Map Item API endpoints using minimal APIs
     app.MapGroup("/api/items")
         .WithTags("Items")
@@ -361,7 +335,7 @@ static async Task CreateAndRunApplication(string[] args)
         .WithTags("Authentication")
         .WithOpenApi()
         .MapAuthEndpoints();
-        
+
     app.MapOpenApi(); // .NET 9 native OpenAPI endpoint
 
     // Configure Prometheus metrics endpoint conditionally
@@ -370,11 +344,37 @@ static async Task CreateAndRunApplication(string[] args)
         app.UseOpenTelemetryPrometheusScrapingEndpoint();
     }
 
-    // Ensure database is created
+    // Apply database migrations
     using (var scope = app.Services.CreateScope())
     {
-        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        await context.Database.EnsureCreatedAsync();
+        var migrationService = scope.ServiceProvider.GetRequiredService<DatabaseMigrationService>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+        logger.LogInformation("Checking database state and applying migrations...");
+
+        // Get database state information for logging
+        var dbState = await migrationService.GetDatabaseStateAsync();
+        logger.LogInformation("Database State - CanConnect: {CanConnect}, IsInMemory: {IsInMemory}, Applied: {Applied}, Pending: {Pending}",
+            dbState.CanConnect, dbState.IsInMemory, dbState.AppliedMigrations.Count, dbState.PendingMigrations.Count);
+
+        if (!string.IsNullOrEmpty(dbState.Error))
+        {
+            logger.LogWarning("Database state check encountered an error: {Error}", dbState.Error);
+        }
+
+        // Apply migrations
+        var migrationResult = await migrationService.ApplyMigrationsAsync();
+
+        if (!migrationResult)
+        {
+            logger.LogError("Failed to apply database migrations. Application may not function correctly.");
+            // In production, you might want to throw an exception here to prevent startup
+            // throw new InvalidOperationException("Database migration failed");
+        }
+        else
+        {
+            logger.LogInformation("Database migrations completed successfully");
+        }
     }
 
     Log.Information("Starting WorkerService application");

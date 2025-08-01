@@ -4,6 +4,7 @@ using MassTransit;
 using WorkerService.Application.Commands;
 using WorkerService.Domain.Interfaces;
 using WorkerService.Application.Common.Metrics;
+using WorkerService.Domain.Events;
 
 namespace WorkerService.Application.Handlers;
 
@@ -53,12 +54,9 @@ public class ShipOrderCommandHandler : IRequestHandler<ShipOrderCommand, bool>
                 request.OrderId, request.TrackingNumber);
 
             // Publish domain events
-            foreach (var domainEvent in order.DomainEvents)
-            {
-                await _publishEndpoint.Publish(domainEvent, cancellationToken);
-                _logger.LogDebug("Published domain event {EventType} for order {OrderId}", 
-                    domainEvent.GetType().Name, order.Id);
-            }
+            await _publishEndpoint.Publish(new OrderShippedEvent(order.Id, order.CustomerId, request.TrackingNumber), cancellationToken);
+            _logger.LogDebug("Published domain event {EventType} for order {OrderId}", 
+                typeof(OrderShippedEvent).Name, order.Id);
             
             order.ClearDomainEvents();
 

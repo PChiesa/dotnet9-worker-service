@@ -4,6 +4,7 @@ using MassTransit;
 using WorkerService.Application.Commands;
 using WorkerService.Domain.Interfaces;
 using WorkerService.Application.Common.Metrics;
+using WorkerService.Domain.Events;
 
 namespace WorkerService.Application.Handlers;
 
@@ -50,12 +51,9 @@ public class ProcessPaymentCommandHandler : IRequestHandler<ProcessPaymentComman
             _logger.LogInformation("Payment processed successfully for order {OrderId}", request.OrderId);
 
             // Publish domain events
-            foreach (var domainEvent in order.DomainEvents)
-            {
-                await _publishEndpoint.Publish(domainEvent, cancellationToken);
-                _logger.LogDebug("Published domain event {EventType} for order {OrderId}", 
-                    domainEvent.GetType().Name, order.Id);
-            }
+            await _publishEndpoint.Publish(new OrderPaidEvent(order.Id, order.TotalAmount.Amount), cancellationToken);
+            _logger.LogDebug("Published domain event {EventType} for order {OrderId}", 
+                typeof(OrderPaidEvent).Name, order.Id);
             
             order.ClearDomainEvents();
 

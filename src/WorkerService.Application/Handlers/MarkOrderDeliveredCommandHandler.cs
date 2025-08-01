@@ -4,6 +4,7 @@ using MassTransit;
 using WorkerService.Application.Commands;
 using WorkerService.Domain.Interfaces;
 using WorkerService.Application.Common.Metrics;
+using WorkerService.Domain.Events;
 
 namespace WorkerService.Application.Handlers;
 
@@ -50,12 +51,9 @@ public class MarkOrderDeliveredCommandHandler : IRequestHandler<MarkOrderDeliver
             _logger.LogInformation("Order {OrderId} marked as delivered successfully", request.OrderId);
 
             // Publish domain events
-            foreach (var domainEvent in order.DomainEvents)
-            {
-                await _publishEndpoint.Publish(domainEvent, cancellationToken);
-                _logger.LogDebug("Published domain event {EventType} for order {OrderId}", 
-                    domainEvent.GetType().Name, order.Id);
-            }
+            await _publishEndpoint.Publish(new OrderDeliveredEvent(order.Id, order.CustomerId), cancellationToken);
+            _logger.LogDebug("Published domain event {EventType} for order {OrderId}", 
+                typeof(OrderDeliveredEvent).Name, order.Id);
             
             order.ClearDomainEvents();
 

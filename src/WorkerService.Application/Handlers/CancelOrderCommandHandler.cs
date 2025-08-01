@@ -4,6 +4,7 @@ using MassTransit;
 using WorkerService.Application.Commands;
 using WorkerService.Domain.Interfaces;
 using WorkerService.Application.Common.Metrics;
+using WorkerService.Domain.Events;
 
 namespace WorkerService.Application.Handlers;
 
@@ -52,12 +53,9 @@ public class CancelOrderCommandHandler : IRequestHandler<CancelOrderCommand, boo
             _logger.LogInformation("Order {OrderId} cancelled successfully", request.OrderId);
 
             // Publish domain events
-            foreach (var domainEvent in order.DomainEvents)
-            {
-                await _publishEndpoint.Publish(domainEvent, cancellationToken);
-                _logger.LogDebug("Published domain event {EventType} for order {OrderId}", 
-                    domainEvent.GetType().Name, order.Id);
-            }
+            await _publishEndpoint.Publish(new OrderCancelledEvent(order.Id, order.CustomerId, request.Reason), cancellationToken);
+            _logger.LogDebug("Published domain event {EventType} for order {OrderId}", 
+                typeof(OrderCancelledEvent).Name, order.Id);
             
             order.ClearDomainEvents();
 
