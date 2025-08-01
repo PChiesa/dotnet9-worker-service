@@ -2,13 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
-using MassTransit;
 using MassTransit.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using WorkerService.Application.Commands;
 using WorkerService.Domain.Events;
-using WorkerService.Infrastructure.Consumers;
 using WorkerService.Infrastructure.Data;
 using WorkerService.IntegrationTests.InMemory.Fixtures;
 using WorkerService.IntegrationTests.Shared.Utilities;
@@ -27,8 +25,7 @@ public class MassTransitInMemoryTests : IClassFixture<InMemoryWebApplicationFact
 
     public MassTransitInMemoryTests(InMemoryWebApplicationFactory factory)
     {
-        _factory = factory;
-        // Get the test harness from the service provider directly (it's a singleton)
+        _factory = factory;    
         _harness = _factory.Services.GetRequiredService<ITestHarness>();
         _client = _factory.CreateClient();
 
@@ -61,11 +58,12 @@ public class MassTransitInMemoryTests : IClassFixture<InMemoryWebApplicationFact
         // Wait for messages to be processed
         await Task.Delay(1000);
 
-        // Let's check if any messages were published at all
-        var allPublished = _harness.Published.Select<OrderPaidEvent>().ToList();
-        
+        // Debug: Check if the harness is properly configured
+        var publishedCount = _harness.Published.Count();
+        var consumedCount = _harness.Consumed.Count();
+
         // Verify that OrderPaidEvent was published        
-        (await _harness.Published.Any<OrderPaidEvent>()).Should().BeTrue($"Expected OrderPaidEvent to be published for order {order.OrderId}, but found {allPublished.Count} messages");
+        (await _harness.Published.Any<OrderPaidEvent>()).Should().BeTrue($"Expected OrderPaidEvent to be published. Published: {publishedCount}, Consumed: {consumedCount}");
 
         var publishedEvent = _harness.Published.Select<OrderPaidEvent>().FirstOrDefault();
         publishedEvent.Should().NotBeNull();

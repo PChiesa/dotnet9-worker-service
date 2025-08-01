@@ -6,7 +6,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using WorkerService.Infrastructure.Data;
-using WorkerService.Infrastructure.Consumers;
 
 namespace WorkerService.IntegrationTests.InMemory.Fixtures;
 
@@ -26,26 +25,7 @@ public class InMemoryWebApplicationFactory : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
-            // Remove all existing MassTransit related services
-            var massTransitServices = services.Where(d => 
-                d.ServiceType.Namespace != null && 
-                d.ServiceType.Namespace.StartsWith("MassTransit")).ToList();
-            
-            foreach (var service in massTransitServices)
-            {
-                services.Remove(service);
-            }
-
-            // Add MassTransit test harness with proper configuration
-            services.AddMassTransitTestHarness(cfg =>
-            {
-                // Register the same consumers as in Program.cs
-                cfg.AddConsumer<OrderCreatedConsumer>();
-                cfg.AddConsumer<OrderPaidConsumer>();
-                cfg.AddConsumer<OrderShippedConsumer>();
-                cfg.AddConsumer<OrderDeliveredConsumer>();
-                cfg.AddConsumer<OrderCancelledConsumer>();
-            });
+            services.AddMassTransitTestHarness();
         });
 
         builder.UseEnvironment("Test");
