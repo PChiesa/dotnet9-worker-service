@@ -174,7 +174,7 @@ public class SimpleInMemoryTests : IClassFixture<InMemoryWebApplicationFactory>
         order.MarkAsPaid();
         order.Status.Should().Be(OrderStatus.Paid);
 
-        order.MarkAsShipped();
+        order.MarkAsShipped("TRK123456789");
         order.Status.Should().Be(OrderStatus.Shipped);
 
         order.MarkAsDelivered();

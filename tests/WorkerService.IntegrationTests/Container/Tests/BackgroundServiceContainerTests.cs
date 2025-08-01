@@ -250,7 +250,7 @@ public class BackgroundServiceContainerTests : IClassFixture<WorkerServiceTestFi
         order.ValidateOrder();
         order.MarkAsPaymentProcessing();
         order.MarkAsPaid();
-        order.MarkAsShipped();
+        order.MarkAsShipped("TRK123456789");
         order.MarkAsDelivered();
         
         var completedAt = order.UpdatedAt;

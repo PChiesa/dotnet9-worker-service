@@ -27,6 +27,15 @@ public record OrderPaidEvent(
 
 public record OrderShippedEvent(
     Guid OrderId,
+    string CustomerId,
+    string TrackingNumber) : IDomainEvent
+{
+    public Guid EventId { get; } = Guid.NewGuid();
+    public DateTime OccurredOn { get; } = DateTime.UtcNow;
+}
+
+public record OrderDeliveredEvent(
+    Guid OrderId,
     string CustomerId) : IDomainEvent
 {
     public Guid EventId { get; } = Guid.NewGuid();
@@ -35,7 +44,8 @@ public record OrderShippedEvent(
 
 public record OrderCancelledEvent(
     Guid OrderId,
-    string CustomerId) : IDomainEvent
+    string CustomerId,
+    string? Reason = null) : IDomainEvent
 {
     public Guid EventId { get; } = Guid.NewGuid();
     public DateTime OccurredOn { get; } = DateTime.UtcNow;

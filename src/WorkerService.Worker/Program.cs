@@ -129,6 +129,10 @@ static async Task CreateAndRunApplication(string[] args)
     {
         // Register consumers
         x.AddConsumer<OrderCreatedConsumer>();
+        x.AddConsumer<OrderPaidConsumer>();
+        x.AddConsumer<OrderShippedConsumer>();
+        x.AddConsumer<OrderDeliveredConsumer>();
+        x.AddConsumer<OrderCancelledConsumer>();
 
         if (inMemorySettings.UseMessageBroker)
         {
@@ -150,6 +154,30 @@ static async Task CreateAndRunApplication(string[] args)
                 {
                     e.SetQuorumQueue(3); // Reliability for production
                     e.ConfigureConsumer<OrderCreatedConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint("order-paid", e =>
+                {
+                    e.SetQuorumQueue(3); // Reliability for production
+                    e.ConfigureConsumer<OrderPaidConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint("order-shipped", e =>
+                {
+                    e.SetQuorumQueue(3); // Reliability for production
+                    e.ConfigureConsumer<OrderShippedConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint("order-delivered", e =>
+                {
+                    e.SetQuorumQueue(3); // Reliability for production
+                    e.ConfigureConsumer<OrderDeliveredConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint("order-cancelled", e =>
+                {
+                    e.SetQuorumQueue(3); // Reliability for production
+                    e.ConfigureConsumer<OrderCancelledConsumer>(context);
                 });
 
                 cfg.ConfigureEndpoints(context);

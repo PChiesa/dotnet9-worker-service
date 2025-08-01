@@ -3,6 +3,7 @@ using WorkerService.Domain.Entities;
 using WorkerService.Domain.Events;
 using WorkerService.Domain.ValueObjects;
 using Xunit;
+using System.Linq;
 
 namespace WorkerService.UnitTests.Domain;
 
@@ -127,7 +128,7 @@ public class OrderTests
         order.ValidateOrder();
         order.MarkAsPaymentProcessing();
         order.MarkAsPaid();
-        order.MarkAsShipped();
+        order.MarkAsShipped("TRK123456789");
         order.MarkAsDelivered();
 
         // Act & Assert
@@ -154,7 +155,7 @@ public class OrderTests
         order.MarkAsPaid();
         order.Status.Should().Be(OrderStatus.Paid);
 
-        order.MarkAsShipped();
+        order.MarkAsShipped("TRK123456789");
         order.Status.Should().Be(OrderStatus.Shipped);
 
         order.MarkAsDelivered();
@@ -294,7 +295,7 @@ public class OrderTests
         order.ValidateOrder();
         order.MarkAsPaymentProcessing();
         order.MarkAsPaid();
-        order.MarkAsShipped();
+        order.MarkAsShipped("TRK123456789");
         order.MarkAsDelivered();
 
         // Act & Assert
@@ -408,7 +409,7 @@ public class OrderTests
         order.MarkAsPaid();
 
         // Act
-        order.MarkAsShipped();
+        order.MarkAsShipped("TRK123456789");
 
         // Assert
         order.Status.Should().Be(OrderStatus.Shipped);
@@ -423,7 +424,7 @@ public class OrderTests
         order.ValidateOrder(); // Status is Validated, not Paid
 
         // Act & Assert
-        var action = () => order.MarkAsShipped();
+        var action = () => order.MarkAsShipped("TRK123456789");
         action.Should().Throw<InvalidOperationException>()
             .WithMessage("Only paid orders can be marked as shipped");
     }
@@ -436,7 +437,7 @@ public class OrderTests
         order.ValidateOrder();
         order.MarkAsPaymentProcessing();
         order.MarkAsPaid();
-        order.MarkAsShipped();
+        order.MarkAsShipped("TRK123456789");
 
         // Act
         order.MarkAsDelivered();
@@ -530,7 +531,7 @@ public class OrderTests
         order.ValidateOrder();
         order.MarkAsPaymentProcessing();
         order.MarkAsPaid();
-        order.MarkAsShipped();
+        order.MarkAsShipped("TRK123456789");
 
         // Assert
         order.DomainEvents.Should().HaveCount(4); // Created, Validated, Paid, Shipped
@@ -538,6 +539,135 @@ public class OrderTests
         order.DomainEvents.Should().ContainSingle(e => e is OrderValidatedEvent);
         order.DomainEvents.Should().ContainSingle(e => e is OrderPaidEvent);
         order.DomainEvents.Should().ContainSingle(e => e is OrderShippedEvent);
+    }
+
+    [Fact]
+    public void MarkAsShipped_WithTrackingNumber_ShouldSetTrackingNumberAndRaiseEvent()
+    {
+        // Arrange
+        var order = CreateTestOrder();
+        order.ValidateOrder();
+        order.MarkAsPaymentProcessing();
+        order.MarkAsPaid();
+        var trackingNumber = "TRACK123456";
+
+        // Act
+        order.MarkAsShipped(trackingNumber);
+
+        // Assert
+        order.Status.Should().Be(OrderStatus.Shipped);
+        order.TrackingNumber.Should().Be(trackingNumber);
+        var shippedEvent = order.DomainEvents.OfType<OrderShippedEvent>().FirstOrDefault();
+        shippedEvent.Should().NotBeNull();
+        shippedEvent!.TrackingNumber.Should().Be(trackingNumber);
+    }
+
+    [Fact]
+    public void MarkAsShipped_WithEmptyTrackingNumber_ShouldThrowException()
+    {
+        // Arrange
+        var order = CreateTestOrder();
+        order.ValidateOrder();
+        order.MarkAsPaymentProcessing();
+        order.MarkAsPaid();
+
+        // Act & Assert
+        var action = () => order.MarkAsShipped("");
+        action.Should().Throw<ArgumentException>()
+            .WithMessage("Tracking number cannot be empty*");
+    }
+
+    [Fact]
+    public void MarkAsShipped_WithNullTrackingNumber_ShouldThrowException()
+    {
+        // Arrange
+        var order = CreateTestOrder();
+        order.ValidateOrder();
+        order.MarkAsPaymentProcessing();
+        order.MarkAsPaid();
+
+        // Act & Assert
+        var action = () => order.MarkAsShipped(null!);
+        action.Should().Throw<ArgumentException>()
+            .WithMessage("Tracking number cannot be empty*");
+    }
+
+    [Fact]
+    public void MarkAsDelivered_FromShippedOrder_ShouldChangeStatusAndRaiseEvent()
+    {
+        // Arrange
+        var order = CreateTestOrder();
+        order.ValidateOrder();
+        order.MarkAsPaymentProcessing();
+        order.MarkAsPaid();
+        order.MarkAsShipped("TRACK123456");
+
+        // Act
+        order.MarkAsDelivered();
+
+        // Assert
+        order.Status.Should().Be(OrderStatus.Delivered);
+        order.DomainEvents.Should().Contain(e => e is OrderDeliveredEvent);
+    }
+
+    [Fact]
+    public void Cancel_WithReason_ShouldChangeStatusAndRaiseEventWithReason()
+    {
+        // Arrange
+        var order = CreateTestOrder();
+        var reason = "Customer requested cancellation";
+
+        // Act
+        order.Cancel(reason);
+
+        // Assert
+        order.Status.Should().Be(OrderStatus.Cancelled);
+        var cancelledEvent = order.DomainEvents.OfType<OrderCancelledEvent>().FirstOrDefault();
+        cancelledEvent.Should().NotBeNull();
+        cancelledEvent!.Reason.Should().Be(reason);
+    }
+
+    [Fact]
+    public void Cancel_WithoutReason_ShouldChangeStatusAndRaiseEventWithNullReason()
+    {
+        // Arrange
+        var order = CreateTestOrder();
+
+        // Act
+        order.Cancel();
+
+        // Assert
+        order.Status.Should().Be(OrderStatus.Cancelled);
+        var cancelledEvent = order.DomainEvents.OfType<OrderCancelledEvent>().FirstOrDefault();
+        cancelledEvent.Should().NotBeNull();
+        cancelledEvent!.Reason.Should().BeNull();
+    }
+
+    [Fact]
+    public void ProcessPayment_FromValidatedOrder_ShouldChangeStatusToPaid()
+    {
+        // Arrange
+        var order = CreateTestOrder();
+        order.ValidateOrder();
+
+        // Act
+        order.ProcessPayment();
+
+        // Assert
+        order.Status.Should().Be(OrderStatus.Paid);
+        order.DomainEvents.Should().Contain(e => e is OrderPaidEvent);
+    }
+
+    [Fact]
+    public void ProcessPayment_FromNonValidatedOrder_ShouldThrowException()
+    {
+        // Arrange
+        var order = CreateTestOrder(); // Status is Pending
+
+        // Act & Assert
+        var action = () => order.ProcessPayment();
+        action.Should().Throw<InvalidOperationException>()
+            .WithMessage("Only validated orders can be processed for payment");
     }
 
     private static Order CreateTestOrder()

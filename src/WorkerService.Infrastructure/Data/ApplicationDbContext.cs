@@ -47,6 +47,10 @@ public class ApplicationDbContext : DbContext
                     .IsRequired();
             });
 
+            entity.Property(e => e.TrackingNumber)
+                .HasMaxLength(100)
+                .IsRequired(false);
+
             entity.Property(e => e.CreatedAt)
                 .IsRequired();
 
@@ -66,6 +70,7 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(e => e.CustomerId);
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.OrderDate);
+            entity.HasIndex(e => e.TrackingNumber);
         });
 
     }

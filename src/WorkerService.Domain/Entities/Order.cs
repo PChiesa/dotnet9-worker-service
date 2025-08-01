@@ -10,6 +10,7 @@ public class Order
     public DateTime OrderDate { get; private set; }
     public OrderStatus Status { get; private set; }
     public Money TotalAmount { get; private set; } = new Money(0);
+    public string? TrackingNumber { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
     
@@ -77,15 +78,31 @@ public class Order
         _domainEvents.Add(new OrderPaidEvent(Id, TotalAmount.Amount));
     }
 
-    public void MarkAsShipped()
+    public void ProcessPayment()
     {
+        if (Status != OrderStatus.Validated)
+            throw new InvalidOperationException("Only validated orders can be processed for payment");
+
+        // First move to payment processing state
+        MarkAsPaymentProcessing();
+        
+        // Then immediately mark as paid (simulating instant payment processing)
+        MarkAsPaid();
+    }
+
+    public void MarkAsShipped(string trackingNumber)
+    {
+        if (string.IsNullOrWhiteSpace(trackingNumber))
+            throw new ArgumentException("Tracking number cannot be empty", nameof(trackingNumber));
+
         if (Status != OrderStatus.Paid)
             throw new InvalidOperationException("Only paid orders can be marked as shipped");
 
         Status = OrderStatus.Shipped;
+        TrackingNumber = trackingNumber;
         UpdatedAt = DateTime.UtcNow;
         
-        _domainEvents.Add(new OrderShippedEvent(Id, CustomerId));
+        _domainEvents.Add(new OrderShippedEvent(Id, CustomerId, trackingNumber));
     }
 
     public void MarkAsDelivered()
@@ -95,9 +112,11 @@ public class Order
 
         Status = OrderStatus.Delivered;
         UpdatedAt = DateTime.UtcNow;
+        
+        _domainEvents.Add(new OrderDeliveredEvent(Id, CustomerId));
     }
 
-    public void Cancel()
+    public void Cancel(string? reason = null)
     {
         if (Status is OrderStatus.Delivered or OrderStatus.Cancelled)
             throw new InvalidOperationException("Cannot cancel delivered or already cancelled orders");
@@ -105,7 +124,7 @@ public class Order
         Status = OrderStatus.Cancelled;
         UpdatedAt = DateTime.UtcNow;
         
-        _domainEvents.Add(new OrderCancelledEvent(Id, CustomerId));
+        _domainEvents.Add(new OrderCancelledEvent(Id, CustomerId, reason));
     }
 
     public void UpdateCustomerId(string customerId)

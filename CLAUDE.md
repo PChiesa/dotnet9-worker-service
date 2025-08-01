@@ -188,6 +188,29 @@ app.MapHealthChecks("/health");
 - **Use in-memory message broker** for application integration tests
 - **Use in-memory database** for data access testing
 - **Test end-to-end workflows** with test harness
+- **IGNORE** Container Integration Tests
+
+### Injecting Mock Services During Integration Tests
+```csharp
+[Fact]
+public async Task Get_QuoteService_ProvidesQuoteInPage()
+{
+    // Arrange
+    var client = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddScoped<IQuoteService, TestQuoteService>();
+            });
+        })
+        .CreateClient();
+
+    //Act
+    var defaultPage = await client.GetAsync("/");
+    
+    //More code...
+}
+```
 
 ### Test Structure
 ```

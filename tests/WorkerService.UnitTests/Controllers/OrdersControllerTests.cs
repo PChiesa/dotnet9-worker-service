@@ -19,6 +19,10 @@ public class OrdersControllerTests
     private readonly Mock<IMediator> _mockMediator;
     private readonly Mock<IValidator<CreateOrderCommand>> _mockCreateValidator;
     private readonly Mock<IValidator<UpdateOrderCommand>> _mockUpdateValidator;
+    private readonly Mock<IValidator<ProcessPaymentCommand>> _mockProcessPaymentValidator;
+    private readonly Mock<IValidator<ShipOrderCommand>> _mockShipOrderValidator;
+    private readonly Mock<IValidator<MarkOrderDeliveredCommand>> _mockMarkDeliveredValidator;
+    private readonly Mock<IValidator<CancelOrderCommand>> _mockCancelOrderValidator;
     private readonly Mock<ILogger<OrdersController>> _mockLogger;
     private readonly OrdersController _controller;
 
@@ -27,12 +31,20 @@ public class OrdersControllerTests
         _mockMediator = new Mock<IMediator>();
         _mockCreateValidator = new Mock<IValidator<CreateOrderCommand>>();
         _mockUpdateValidator = new Mock<IValidator<UpdateOrderCommand>>();
+        _mockProcessPaymentValidator = new Mock<IValidator<ProcessPaymentCommand>>();
+        _mockShipOrderValidator = new Mock<IValidator<ShipOrderCommand>>();
+        _mockMarkDeliveredValidator = new Mock<IValidator<MarkOrderDeliveredCommand>>();
+        _mockCancelOrderValidator = new Mock<IValidator<CancelOrderCommand>>();
         _mockLogger = new Mock<ILogger<OrdersController>>();
         
         _controller = new OrdersController(
             _mockMediator.Object,
             _mockCreateValidator.Object,
             _mockUpdateValidator.Object,
+            _mockProcessPaymentValidator.Object,
+            _mockShipOrderValidator.Object,
+            _mockMarkDeliveredValidator.Object,
+            _mockCancelOrderValidator.Object,
             _mockLogger.Object);
     }
 

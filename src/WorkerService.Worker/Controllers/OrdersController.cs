@@ -20,17 +20,29 @@ public class OrdersController : ControllerBase
     private readonly IMediator _mediator;
     private readonly IValidator<CreateOrderCommand> _createValidator;
     private readonly IValidator<UpdateOrderCommand> _updateValidator;
+    private readonly IValidator<ProcessPaymentCommand> _processPaymentValidator;
+    private readonly IValidator<ShipOrderCommand> _shipOrderValidator;
+    private readonly IValidator<MarkOrderDeliveredCommand> _markDeliveredValidator;
+    private readonly IValidator<CancelOrderCommand> _cancelOrderValidator;
     private readonly ILogger<OrdersController> _logger;
 
     public OrdersController(
         IMediator mediator,
         IValidator<CreateOrderCommand> createValidator,
         IValidator<UpdateOrderCommand> updateValidator,
+        IValidator<ProcessPaymentCommand> processPaymentValidator,
+        IValidator<ShipOrderCommand> shipOrderValidator,
+        IValidator<MarkOrderDeliveredCommand> markDeliveredValidator,
+        IValidator<CancelOrderCommand> cancelOrderValidator,
         ILogger<OrdersController> logger)
     {
         _mediator = mediator;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
+        _processPaymentValidator = processPaymentValidator;
+        _shipOrderValidator = shipOrderValidator;
+        _markDeliveredValidator = markDeliveredValidator;
+        _cancelOrderValidator = cancelOrderValidator;
         _logger = logger;
     }
 
@@ -256,4 +268,238 @@ public class OrdersController : ControllerBase
                 new { message = "An error occurred while deleting the order" });
         }
     }
+
+    /// <summary>
+    /// Process payment for a validated order
+    /// </summary>
+    /// <param name="id">Order ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Success status</returns>
+    [HttpPost("{id:guid}/pay")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> ProcessPayment(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("API request to process payment for order {OrderId}", id);
+
+            var command = new ProcessPaymentCommand(id);
+            var validationResult = await _processPaymentValidator.ValidateAsync(command, cancellationToken);
+            if (!validationResult.IsValid)
+            {
+                var problemDetails = new ValidationProblemDetails();
+                foreach (var error in validationResult.Errors)
+                {
+                    problemDetails.Errors.TryAdd(error.PropertyName, new[] { error.ErrorMessage });
+                }
+                return BadRequest(problemDetails);
+            }
+
+            var result = await _mediator.Send(command, cancellationToken);
+
+            if (!result)
+            {
+                _logger.LogWarning("Order {OrderId} not found for payment processing via API", id);
+                return NotFound(new { message = $"Order with ID {id} was not found" });
+            }
+
+            _logger.LogInformation("Payment processed successfully for order {OrderId} via API", id);
+
+            return Ok(new { message = "Payment processed successfully", orderId = id });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Invalid operation when processing payment for order {OrderId}", id);
+            return Conflict(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process payment for order {OrderId}", id);
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "An error occurred while processing the payment" });
+        }
+    }
+
+    /// <summary>
+    /// Ship a paid order with tracking number
+    /// </summary>
+    /// <param name="id">Order ID</param>
+    /// <param name="request">Ship order request containing tracking number</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Success status</returns>
+    [HttpPost("{id:guid}/ship")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> ShipOrder(Guid id, [FromBody] ShipOrderRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("API request to ship order {OrderId} with tracking number {TrackingNumber}", 
+                id, request.TrackingNumber);
+
+            var command = new ShipOrderCommand(id, request.TrackingNumber);
+            var validationResult = await _shipOrderValidator.ValidateAsync(command, cancellationToken);
+            if (!validationResult.IsValid)
+            {
+                var problemDetails = new ValidationProblemDetails();
+                foreach (var error in validationResult.Errors)
+                {
+                    problemDetails.Errors.TryAdd(error.PropertyName, new[] { error.ErrorMessage });
+                }
+                return BadRequest(problemDetails);
+            }
+
+            var result = await _mediator.Send(command, cancellationToken);
+
+            if (!result)
+            {
+                _logger.LogWarning("Order {OrderId} not found for shipping via API", id);
+                return NotFound(new { message = $"Order with ID {id} was not found" });
+            }
+
+            _logger.LogInformation("Order {OrderId} shipped successfully via API", id);
+
+            return Ok(new { message = "Order shipped successfully", orderId = id, trackingNumber = request.TrackingNumber });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Invalid operation when shipping order {OrderId}", id);
+            return Conflict(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to ship order {OrderId}", id);
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "An error occurred while shipping the order" });
+        }
+    }
+
+    /// <summary>
+    /// Mark a shipped order as delivered
+    /// </summary>
+    /// <param name="id">Order ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Success status</returns>
+    [HttpPost("{id:guid}/deliver")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> MarkAsDelivered(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("API request to mark order {OrderId} as delivered", id);
+
+            var command = new MarkOrderDeliveredCommand(id);
+            var validationResult = await _markDeliveredValidator.ValidateAsync(command, cancellationToken);
+            if (!validationResult.IsValid)
+            {
+                var problemDetails = new ValidationProblemDetails();
+                foreach (var error in validationResult.Errors)
+                {
+                    problemDetails.Errors.TryAdd(error.PropertyName, new[] { error.ErrorMessage });
+                }
+                return BadRequest(problemDetails);
+            }
+
+            var result = await _mediator.Send(command, cancellationToken);
+
+            if (!result)
+            {
+                _logger.LogWarning("Order {OrderId} not found for delivery marking via API", id);
+                return NotFound(new { message = $"Order with ID {id} was not found" });
+            }
+
+            _logger.LogInformation("Order {OrderId} marked as delivered successfully via API", id);
+
+            return Ok(new { message = "Order marked as delivered successfully", orderId = id });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Invalid operation when marking order {OrderId} as delivered", id);
+            return Conflict(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to mark order {OrderId} as delivered", id);
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "An error occurred while marking the order as delivered" });
+        }
+    }
+
+    /// <summary>
+    /// Cancel an order with optional reason
+    /// </summary>
+    /// <param name="id">Order ID</param>
+    /// <param name="request">Cancel order request containing optional reason</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Success status</returns>
+    [HttpPost("{id:guid}/cancel")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> CancelOrder(Guid id, [FromBody] CancelOrderRequest? request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("API request to cancel order {OrderId} with reason: {Reason}", 
+                id, request?.Reason ?? "No reason provided");
+
+            var command = new CancelOrderCommand(id, request?.Reason);
+            var validationResult = await _cancelOrderValidator.ValidateAsync(command, cancellationToken);
+            if (!validationResult.IsValid)
+            {
+                var problemDetails = new ValidationProblemDetails();
+                foreach (var error in validationResult.Errors)
+                {
+                    problemDetails.Errors.TryAdd(error.PropertyName, new[] { error.ErrorMessage });
+                }
+                return BadRequest(problemDetails);
+            }
+
+            var result = await _mediator.Send(command, cancellationToken);
+
+            if (!result)
+            {
+                _logger.LogWarning("Order {OrderId} not found for cancellation via API", id);
+                return NotFound(new { message = $"Order with ID {id} was not found" });
+            }
+
+            _logger.LogInformation("Order {OrderId} cancelled successfully via API", id);
+
+            return Ok(new { message = "Order cancelled successfully", orderId = id, reason = request?.Reason });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Invalid operation when cancelling order {OrderId}", id);
+            return Conflict(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to cancel order {OrderId}", id);
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "An error occurred while cancelling the order" });
+        }
+    }
 }
+
+/// <summary>
+/// Request model for shipping an order
+/// </summary>
+public record ShipOrderRequest(string TrackingNumber);
+
+/// <summary>
+/// Request model for cancelling an order
+/// </summary>
+public record CancelOrderRequest(string? Reason = null);
